@@ -292,6 +292,52 @@ int read_message_body1(int channel_fd, Message *msg_buffer) {
     return payload_read_result;
 }
 
+int read_header(int channel_fd, Message *msg_buffer) {
+    int header_status = read_message_header2(channel_fd, msg_buffer);
+    if (header_status == 1) {
+        return 1;
+    }
+
+    if (header_status == -1) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_body(int channel_fd, Message *msg_buffer) {
+    int body_read_status = read_message_body1(channel_fd, msg_buffer);
+    if (body_read_status != 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+void log_error(const char *msg, int pid, int src_id) {
+    fprintf(stderr, msg, pid, src_id);
+}
+
+int receive_message_from_process(int channel_fd, Message *msg_buffer, int pid, int src_id) {
+    int header_status = read_header(channel_fd, msg_buffer);
+    if (header_status == 1) {
+        return 1;
+    }
+
+    if (header_status == -1) {
+        log_error("Process %d: Error reading header from process %d\n", pid, src_id);
+        return -1;
+    }
+
+    int body_status = read_body(channel_fd, msg_buffer);
+    if (body_status != 0) {
+        log_error("Process %d: Error reading message body from process %d\n", pid, src_id);
+        return -2;
+    }
+
+    return 0;
+}
+
 int receive_any(void *context, Message *msg_buffer) {
     if (check_input1(context, msg_buffer) != 0) {
         return -1;
@@ -307,29 +353,18 @@ int receive_any(void *context, Message *msg_buffer) {
             }
 
             int channel_fd = get_channel_fd(&active_proc, src_id);
-            int header_status = read_message_header2(channel_fd, msg_buffer);
+            int result = receive_message_from_process(channel_fd, msg_buffer, active_proc.pid, src_id);
 
-            if (header_status == 1) {
-                continue; // Retry
+            if (result == 0) {
+                printf("Process %d: A message from process %d was successfully received and processed\n",
+                       active_proc.pid, src_id);
+                return 0;
+            } else if (result == 1) {
+                continue;
             }
-
-            if (header_status == -1) {
-                fprintf(stderr, "Process %d: Error reading header from process %d\n", active_proc.pid, src_id);
-                return -2;
-            }
-
-            int body_read_status = read_message_body1(channel_fd, msg_buffer);
-            if (body_read_status != 0) {
-                fprintf(stderr, "Process %d: Error reading message body from process %d\n", active_proc.pid, src_id);
-                return -3;
-            }
-
-            printf("Process %d: A message from process %d was successfully received and processed\n",
-                   active_proc.pid, src_id);
-            return 0;
         }
     }
 
-    fprintf(stderr, "Process %d: Failed to receive message from any process\n", active_proc.pid);
-    return -4;
+    log_error("Process %d: Failed to receive message from any process\n", active_proc.pid, -1);
+    return -3;
 }
