@@ -76,39 +76,31 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
             exit(EXIT_FAILURE);
         }
         if (pid == 0) {
-            handle_child_process(i, num_processes, balances, pipes, log_pipes, log_events);
+            Process child_proc = {
+                .num_process = num_processes,
+                .pipes = pipes,
+                .pid = i,
+                .balance = balances[i - 1],
+                .history = {.s_id = i, .s_history_len = 0},
+                .last_time = get_physical_time()
+            };
+
+            close_non_related_pipes(&child_proc, log_pipes);
+            send_message(&child_proc, STARTED, NULL);
+
+            fprintf(log_events, log_started_fmt, get_physical_time(), i, getpid(), getppid(), child_proc.balance);
+            if (check_all_received(&child_proc, STARTED) != 0) {
+                fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", i);
+                exit(EXIT_FAILURE);
+            }
+            fprintf(log_events, log_received_all_started_fmt, get_physical_time(), i);
+
+            bank_operations(&child_proc, log_events);
+
+            close_outcoming_pipes(&child_proc, log_pipes);
             exit(EXIT_SUCCESS);
         }
     }
-}
-
-void handle_child_process(local_id i, int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
-    Process child_proc = initialize_child_process(i, num_processes, balances, pipes);
-
-    close_non_related_pipes(&child_proc, log_pipes);
-    send_message(&child_proc, STARTED, NULL);
-    log_process_start(i, log_events, &child_proc);
-
-    if (check_all_received(&child_proc, STARTED) != 0) {
-        fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", i);
-        exit(EXIT_FAILURE);
-    }
-    fprintf(log_events, log_received_all_started_fmt, get_physical_time(), i);
-
-    bank_operations(&child_proc, log_events);
-    close_outcoming_pipes(&child_proc, log_pipes);
-}
-
-Process initialize_child_process(local_id i, int num_processes, int *balances, Pipe **pipes) {
-    Process child_proc = {
-        .num_process = num_processes,
-        .pipes = pipes,
-        .pid = i,
-        .balance = balances[i - 1],
-        .history = {.s_id = i, .s_history_len = 0},
-        .last_time = get_physical_time()
-    };
-    return child_proc;
 }
 
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
