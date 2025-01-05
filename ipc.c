@@ -57,25 +57,33 @@ int send_multicast(void *context, const Message *message) {
         }
     }
     return 0;
+
 }
 
-
-int check(int fd_to_read, Message *message) {
+int validate_message_pointer(Message *message) {
     if (message == NULL) {
         fprintf(stderr, "Error: pointer to message is NULL\n");
         return -1;
     }
+    return 0;
+}
 
+int validate_file_descriptor(int fd_to_read) {
     if (fd_to_read < 0) {
         fprintf(stderr, "Error: invalid file descriptor (%d)\n", fd_to_read);
         return -1;
     }
+    return 0;
+}
 
-    ssize_t read_status = read(fd_to_read, &(message->s_header), sizeof(MessageHeader));
+ssize_t read_message_header(int fd_to_read, MessageHeader *header) {
+    return read(fd_to_read, header, sizeof(MessageHeader));
+}
 
+int handle_read_status(ssize_t read_status) {
     if (read_status == -1) {
         if (errno == EAGAIN) {
-            return 2;  
+            return 2;
         } else {
             perror("Error reading data");
             return 1;
@@ -84,7 +92,7 @@ int check(int fd_to_read, Message *message) {
 
     if (read_status == 0) {
         fprintf(stderr, "Attention: end of file or no data\n");
-        return 2;  
+        return 2;
     }
 
     if (read_status < sizeof(MessageHeader)) {
@@ -94,6 +102,20 @@ int check(int fd_to_read, Message *message) {
 
     return 0;
 }
+
+int check(int fd_to_read, Message *message) {
+    if (validate_message_pointer(message) < 0) {
+        return -1;
+    }
+
+    if (validate_file_descriptor(fd_to_read) < 0) {
+        return -1;
+    }
+
+    ssize_t read_status = read_message_header(fd_to_read, &(message->s_header));
+    return handle_read_status(read_status);
+}
+
 
 
 int message(int fd, Message *msg_ptr) {
