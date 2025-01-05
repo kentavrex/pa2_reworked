@@ -365,23 +365,38 @@ int receive_message(Process* process, int pid, Message* msg) {
     return 0;
 }
 
-int count_messages_of_type(Process* process, MessageType type) {
-    int count = 0;
+int process_message(Process* process, int pid, MessageType type, int* count) {
+    Message msg;
+    if (receive_message(process, pid, &msg) == -1) {
+        return -1;
+    }
+    if (msg.s_header.s_type == type) {
+        (*count)++;
+        printf("Process %d readed %d messages with type %s\n",
+               process->pid, *count, type == 0 ? "STARTED" : "DONE");
+    }
+    return 0;
+}
+
+int count_messages_from_all(Process* process, MessageType type, int* count) {
     for (int i = 1; i < process->num_process; i++) {
         if (i != process->pid) {
-            Message msg;
-            if (receive_message(process, i, &msg) == -1) {
+            if (process_message(process, i, type, count) == -1) {
                 return -1;
-            }
-            if (msg.s_header.s_type == type) {
-                count++;
-                printf("Process %d readed %d messages with type %s\n",
-                       process->pid, count, type == 0 ? "STARTED" : "DONE");
             }
         }
     }
+    return 0;
+}
+
+int count_messages_of_type(Process* process, MessageType type) {
+    int count = 0;
+    if (count_messages_from_all(process, type, &count) == -1) {
+        return -1;
+    }
     return count;
 }
+
 
 int check_received_for_process(Process* process, int count) {
     if (process->pid != 0 && count == process->num_process - 2) {
@@ -455,7 +470,7 @@ Pipe** init_pipes(int process_count, FILE* log_fp) {
             }
 
             if (init_single_pipe(&pipes[src][dest], log_fp, src, dest) != 0) {
-                return NULL; // Ошибка при инициализации трубы
+                return NULL;
             }
         }
     }
