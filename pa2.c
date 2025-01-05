@@ -97,7 +97,7 @@ void log_child_process_started(FILE *log_events, int i, Process *child_proc) {
     fprintf(log_events, log_started_fmt, get_physical_time(), i, getpid(), getppid(), child_proc->balance);
 }
 
-void check_received_all_started(Process *child_proc, int i) {
+void check_received_all_started(FILE *log_events, Process *child_proc, int i) {
     if (check_all_received(child_proc, STARTED) != 0) {
         fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", i);
         exit(EXIT_FAILURE);
@@ -125,7 +125,7 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
             send_message(&child_proc, STARTED, NULL);
 
             log_child_process_started(log_events, i, &child_proc);
-            check_received_all_started(&child_proc, i);
+            check_received_all_started(log_events, &child_proc, i);
 
             child_process_operations(&child_proc, log_events);
             close_child_pipes(&child_proc, log_pipes);
@@ -134,6 +134,7 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
         }
     }
 }
+
 
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process parent_proc = {
