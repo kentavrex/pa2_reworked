@@ -68,20 +68,6 @@ void parse_initial_balances(int argc, char *argv[], int num_processes, int *bala
     }
 }
 
-void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
-    for (local_id i = 1; i < num_processes; ++i) {
-        pid_t pid = fork();
-        if (pid < 0) {
-            perror("Fork failed");
-            exit(EXIT_FAILURE);
-        }
-        if (pid == 0) {
-            handle_child_process(i, num_processes, balances, pipes, log_pipes, log_events);
-            exit(EXIT_SUCCESS);
-        }
-    }
-}
-
 Process initialize_child_process(local_id i, int num_processes, int *balances, Pipe **pipes) {
     Process child_proc = {
         .num_process = num_processes,
@@ -94,7 +80,7 @@ Process initialize_child_process(local_id i, int num_processes, int *balances, P
     return child_proc;
 }
 
-void handle_child_process(local_id i, int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
+void handle_child_process1(local_id i, int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process child_proc = initialize_child_process(i, num_processes, balances, pipes);
 
     close_non_related_pipes(&child_proc, log_pipes);
@@ -109,6 +95,21 @@ void handle_child_process(local_id i, int num_processes, int *balances, Pipe **p
 
     bank_operations(&child_proc, log_events);
     close_outcoming_pipes(&child_proc, log_pipes);
+}
+
+
+void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
+    for (local_id i = 1; i < num_processes; ++i) {
+        pid_t pid = fork();
+        if (pid < 0) {
+            perror("Fork failed");
+            exit(EXIT_FAILURE);
+        }
+        if (pid == 0) {
+            handle_child_process1(i, num_processes, balances, pipes, log_pipes, log_events);
+            exit(EXIT_SUCCESS);
+        }
+    }
 }
 
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
