@@ -3,122 +3,138 @@
 #include "pipes_manager.h"
 #include <fcntl.h>
 
-void bank_operations(Process *process, FILE* event_file_ptr) {
+void handle_transfer(Process *process, Message *msg, FILE *event_file_ptr) {
+    TransferOrder order = *(TransferOrder *)msg->s_payload;
+    printf("Order src number is %d WHILE PROCESS PID is %d\n", order.s_src, process->pid);
+
+    if (order.s_src == process->pid) {
+        if (process->balance < order.s_amount) {
+            fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
+            return;
+        }
+
+        msg->s_header.s_local_time = get_physical_time();
+        timestamp_t time = msg->s_header.s_local_time;
+        process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order.s_amount);
+        process->balance -= order.s_amount;
+
+        fprintf(event_file_ptr, log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
+        printf(log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
+        if (send(process, order.s_dst, msg) == -1) {
+            fprintf(stderr, "Error sending transfer from process %d to process %d\n", process->pid, order.s_dst);
+            return;
+        }
+    } else {
+        msg->s_header.s_local_time = get_physical_time();
+        int time = msg->s_header.s_local_time;
+        process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, order.s_amount);
+        process->balance += order.s_amount;
+
+        fprintf(event_file_ptr, log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
+        printf(log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
+        if (send_message(process, ACK, NULL) == -1) {
+            fprintf(stderr, "Error sending ACK from process %d to process %d\n", process->pid, order.s_src);
+            return;
+        }
+    }
+}
+
+void handle_stop(Process *process, int *is_stopped, FILE *event_file_ptr) {
+    (*is_stopped)++;
+    if (*is_stopped > 1) {
+        fprintf(stderr, "Error: Process %d received multiple STOP signals\n", process->pid);
+        exit(1);
+    }
+
+    if (send_message(process, DONE, NULL) == -1) {
+        fprintf(stderr, "Error sending DONE message from process %d\n", process->pid);
+        exit(1);
+    }
+    printf(log_done_fmt, get_physical_time(), process->pid, process->balance);
+    fprintf(event_file_ptr, log_done_fmt, get_physical_time(), process->pid, process->balance);
+}
+
+void handle_done(Process *process, int *count_done) {
+    (*count_done)++;
+}
+
+void handle_received_message(Process *process, FILE *event_file_ptr, int *count_done, int *is_stopped) {
+    Message msg;
+    if (receive_any(process, &msg) == -1) {
+        printf("Error while receiving any at bank operations\n");
+        exit(1);
+    }
+
+    printf("%d\n", msg.s_header.s_type);
+    switch (msg.s_header.s_type) {
+        case TRANSFER:
+            handle_transfer(process, &msg, event_file_ptr);
+            break;
+
+        case STOP:
+            handle_stop(process, is_stopped, event_file_ptr);
+            break;
+
+        case DONE:
+            handle_done(process, count_done);
+            break;
+
+        default:
+            fprintf(stderr, "Warning: Process %d received an unknown message type\n", process->pid);
+            break;
+    }
+}
+
+void bank_operations(Process *process, FILE *event_file_ptr) {
     int count_done = 0;
     int is_stopped = 0;
-    while(1) {
+    while (1) {
         if (is_stopped && (count_done == process->num_process - 2)) {
             printf(log_received_all_done_fmt, get_physical_time(), process->pid);
             fprintf(event_file_ptr, log_received_all_done_fmt, get_physical_time(), process->pid);
             timestamp_t time = get_physical_time();
             process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, 0);
             send_message(process, BALANCE_HISTORY, NULL);
-            return ;
+            return;
         }
-        Message msg;
-        TransferOrder order;
-        if (receive_any(process, &msg) == -1) {
-            printf("Error whule recieving any at bank operations\n");
-            exit(1);
-        }
-        printf("%d\n", msg.s_header.s_type);
-        switch (msg.s_header.s_type)
-        {
-        case TRANSFER:
-
-        order = *(TransferOrder *) msg.s_payload;
-        printf("Order src number is %d WHILE PROCESS PID is %d\n", order.s_src, process->pid);
-
-
-        if (order.s_src == process->pid) {
-
-            if (process->balance < order.s_amount) {
-                fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
-                return;
-            }
-
-
-            msg.s_header.s_local_time = get_physical_time();
-            timestamp_t time = msg.s_header.s_local_time;
-            process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order.s_amount);
-            process->balance -= order.s_amount;
-
-
-            fprintf(event_file_ptr, log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
-            printf(log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
-            if (send(process, order.s_dst, &msg) == -1) {
-                fprintf(stderr, "Error sending transfer from process %d to process %d\n", process->pid, order.s_dst);
-                return;
-            }
-        } else {
-
-            msg.s_header.s_local_time = get_physical_time();
-            int time = msg.s_header.s_local_time;
-            process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, order.s_amount);
-            process->balance += order.s_amount;
-
-
-            fprintf(event_file_ptr, log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
-            printf(log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
-            if (send_message(process, ACK, NULL) == -1) {
-                fprintf(stderr, "Error sending ACK from process %d to process %d\n", process->pid, order.s_src);
-                return;
-            }
-        }
-        break;
-
-    case STOP:
-
-        is_stopped++;
-        if (is_stopped > 1) {
-            fprintf(stderr, "Error: Process %d received multiple STOP signals\n", process->pid);
-            exit(1);
-        }
-
-
-        if (send_message(process, DONE, NULL) == -1) {
-            fprintf(stderr, "Error sending DONE message from process %d\n", process->pid);
-            exit(1);
-        }
-        printf(log_done_fmt, get_physical_time(), process->pid, process->balance);
-        fprintf(event_file_ptr, log_done_fmt, get_physical_time(), process->pid, process->balance);
-        break;
-
-    case DONE:
-        count_done++;
-          break;
-
-        default:
-          fprintf(stderr, "Warning: Process %d received an unknown message type\n", process->pid);
-          break;
-        }
+        handle_received_message(process, event_file_ptr, &count_done, &is_stopped);
     }
 }
+
+
+int retrieve_history_from_process(Process* processes, local_id idx, Message* received_msg) {
+    if (receive(processes, idx + 1, received_msg) != 0) {
+        fprintf(stderr, "Error: Unable to retrieve history from process %d. Possible communication issue.\n", idx + 1);
+        return -1;
+    }
+    return 0;
+}
+
+void add_history_to_collection(AllHistory* collection, local_id idx, Message* received_msg) {
+    BalanceHistory received_history;
+    memcpy(&received_history, received_msg->s_payload, received_msg->s_header.s_payload_len);
+    collection->s_history[idx] = received_history;
+}
+
 void histories(Process* processes) {
     AllHistory collection;
     collection.s_history_len = processes->num_process - 1;
 
     local_id idx = 0;
-    while (idx < processes->num_process - 1) {
-        Message received_msg;
+    Message received_msg;
 
-        
-        if (receive(processes, idx + 1, &received_msg) != 0) {
-            fprintf(stderr, "Error: Unable to retrieve history from process %d. Possible communication issue.\n", idx + 1);
+    while (idx < processes->num_process - 1) {
+        if (retrieve_history_from_process(processes, idx, &received_msg) != 0) {
             exit(EXIT_FAILURE);
         }
 
-        
-        BalanceHistory received_history;
-        memcpy(&received_history, received_msg.s_payload, received_msg.s_header.s_payload_len);
-
-        collection.s_history[idx] = received_history;
+        add_history_to_collection(&collection, idx, &received_msg);
         idx++;
     }
 
-
     print_history(&collection);
 }
+
 
 void close_non_related_pipes(Process* pipes, FILE* pipe_file_ptr) {
     int n = pipes->num_process;
