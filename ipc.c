@@ -323,18 +323,15 @@ int receive_message_from_process(int channel_fd, Message *msg_buffer, int pid, i
     if (header_status == 1) {
         return 1;
     }
-
     if (header_status == -1) {
         log_error("Process %d: Error reading header from process %d\n", pid, src_id);
         return -1;
     }
-
     int body_status = read_body(channel_fd, msg_buffer);
     if (body_status != 0) {
         log_error("Process %d: Error reading message body from process %d\n", pid, src_id);
         return -2;
     }
-
     return 0;
 }
 
@@ -342,16 +339,13 @@ int receive_any(void *context, Message *msg_buffer) {
     if (check_input1(context, msg_buffer) != 0) {
         return -1;
     }
-
     Process *proc_info = (Process *)context;
     Process active_proc = *proc_info;
-
     while (1) {
         for (local_id src_id = 0; src_id < active_proc.num_process; ++src_id) {
             if (src_id == active_proc.pid) {
                 continue;
             }
-
             int channel_fd = get_channel_fd(&active_proc, src_id);
             int result = receive_message_from_process(channel_fd, msg_buffer, active_proc.pid, src_id);
 
@@ -364,7 +358,6 @@ int receive_any(void *context, Message *msg_buffer) {
             }
         }
     }
-
     log_error("Process %d: Failed to receive message from any process\n", active_proc.pid, -1);
     return -3;
 }

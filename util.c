@@ -407,14 +407,6 @@ int check_received_for_process(Process* process, int count) {
     return -1;
 }
 
-int check_all_received(Process* process, MessageType type) {
-    int count = count_messages_of_type(process, type);
-    if (count == -1) {
-        return -1;
-    }
-    return check_received_for_process(process, count);
-}
-
 int create_pipe(Pipe* pipe_n) {
     if (pipe(pipe_n->fd) != 0) {
         perror("Pipe creation failed");
@@ -456,13 +448,7 @@ int init_single_pipe(Pipe* pipe, FILE* log_fp, int src, int dest) {
     return 0;
 }
 
-Pipe** init_pipes(int process_count, FILE* log_fp) {
-    Pipe** pipes = (Pipe**) malloc(process_count * sizeof(Pipe*));
-
-    for (int i = 0; i < process_count; i++) {
-        pipes[i] = (Pipe*) malloc(process_count * sizeof(Pipe));
-    }
-
+int initialize_pipes(Pipe** pipes, int process_count, FILE* log_fp) {
     for (int src = 0; src < process_count; src++) {
         for (int dest = 0; dest < process_count; dest++) {
             if (src == dest) {
@@ -470,9 +456,48 @@ Pipe** init_pipes(int process_count, FILE* log_fp) {
             }
 
             if (init_single_pipe(&pipes[src][dest], log_fp, src, dest) != 0) {
-                return NULL;
+                return -1;
             }
         }
+    }
+
+    return 0;
+}
+
+
+int check_all_received(Process* process, MessageType type) {
+    int count = count_messages_of_type(process, type);
+    if (count == -1) {
+        return -1;
+    }
+    return check_received_for_process(process, count);
+}
+
+
+Pipe** allocate_pipe_memory(int process_count) {
+    Pipe** pipes = (Pipe**) malloc(process_count * sizeof(Pipe*));
+    if (pipes == NULL) {
+        return NULL;
+    }
+
+    for (int i = 0; i < process_count; i++) {
+        pipes[i] = (Pipe*) malloc(process_count * sizeof(Pipe));
+        if (pipes[i] == NULL) {
+            return NULL;
+        }
+    }
+
+    return pipes;
+}
+
+Pipe** init_pipes(int process_count, FILE* log_fp) {
+    Pipe** pipes = allocate_pipe_memory(process_count);
+    if (pipes == NULL) {
+        return NULL;
+    }
+
+    if (initialize_pipes(pipes, process_count, log_fp) != 0) {
+        return NULL;
     }
 
     return pipes;
