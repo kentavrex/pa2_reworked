@@ -68,6 +68,11 @@ void parse_initial_balances(int argc, char *argv[], int num_processes, int *bala
     }
 }
 
+void handle_fork_error(void) {
+    perror("Fork failed");
+    exit(EXIT_FAILURE);
+}
+
 // Функция для создания дочернего процесса
 pid_t create_child_process(int i) {
     pid_t pid = fork();
