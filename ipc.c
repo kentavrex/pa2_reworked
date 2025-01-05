@@ -189,49 +189,111 @@ int message(int fd, Message *msg_ptr) {
     return result;
 }
 
-int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
+int check_input(void *process_context, Message *msg_buffer) {
     if (process_context == NULL || msg_buffer == NULL) {
         fprintf(stderr, "Error: invalid process or message (NULL pointer)\n");
+        return -1;
+    }
+    return 0;
+}
+
+int get_pipe_descriptors(Process *active_proc, local_id sender_id, int *read_descriptor, int *write_descriptor) {
+    *read_descriptor = active_proc->pipes[sender_id][active_proc->pid].fd[READ];
+    *write_descriptor = active_proc->pipes[sender_id][active_proc->pid].fd[WRITE];
+    printf("Process %d is reading from the channel: write fd: %d, read fd: %d\n",
+           active_proc->pid, *write_descriptor, *read_descriptor);
+    return 0;
+}
+
+int read_message_header1(int read_descriptor, Message *msg_buffer) {
+    int availability_status = check(read_descriptor, msg_buffer);
+
+    if (availability_status == 2) {
+        return 1;
+    }
+
+    if (availability_status == 0) {
+        printf("Message header read successfully\n");
+        return 0;
+    }
+
+    return -1;
+}
+
+int read_message_body(int read_descriptor, Message *msg_buffer) {
+    int body_read_status = message(read_descriptor, msg_buffer);
+    return body_read_status;
+}
+
+int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
+    if (check_input(process_context, msg_buffer) != 0) {
         return -1;
     }
 
     Process *proc_info = (Process *)process_context;
     Process active_proc = *proc_info;
 
-    int read_descriptor = active_proc.pipes[sender_id][active_proc.pid].fd[READ];
-    int write_descriptor = active_proc.pipes[sender_id][active_proc.pid].fd[WRITE];
-    printf("Process %d is reading from the channel: write fd: %d, read fd: %d\n",
-           active_proc.pid, write_descriptor, read_descriptor);
+    int read_descriptor, write_descriptor;
+    get_pipe_descriptors(&active_proc, sender_id, &read_descriptor, &write_descriptor);
 
     while (1) {
-        int availability_status = check(read_descriptor, msg_buffer);
-        
-        if (availability_status == 2) {
+        int header_status = read_message_header1(read_descriptor, msg_buffer);
+
+        if (header_status == 1) {
             continue;
         }
 
-        if (availability_status == 0) {
-            printf("Process %d: Message header read successfully\n", active_proc.pid);
+        if (header_status == 0) {
             break;
-        } 
+        }
 
-        fprintf(stderr, "Process %d: error trying to read header from process %d\n", active_proc.pid, sender_id);
+        fprintf(stderr, "Error reading header from process %d\n", sender_id);
         return -2;
     }
 
-    int body_read_status = message(read_descriptor, msg_buffer);
+    int body_read_status = read_message_body(read_descriptor, msg_buffer);
     if (body_read_status != 0) {
-        fprintf(stderr, "Process %d: error reading message body from process %d\n", active_proc.pid, sender_id);
+        fprintf(stderr, "Error reading message body from process %d\n", sender_id);
         return -3;
     }
 
-    printf("Process %d: a message from process %d was successfully received and processed\n", active_proc.pid, sender_id);
+    printf("Message from process %d successfully received and processed\n", sender_id);
     return 0;
 }
 
-int receive_any(void *context, Message *msg_buffer) {
+
+int check_input1(void *context, Message *msg_buffer) {
     if (context == NULL || msg_buffer == NULL) {
         fprintf(stderr, "Error: invalid context or message buffer (NULL value)\n");
+        return -1;
+    }
+    return 0;
+}
+
+int get_channel_fd(Process *active_proc, local_id src_id) {
+    return active_proc->pipes[src_id][active_proc->pid].fd[READ];
+}
+
+int read_message_header2(int channel_fd, Message *msg_buffer) {
+    int availability_check = check(channel_fd, msg_buffer);
+    if (availability_check == 2) {
+        return 1;
+    }
+
+    if (availability_check < 0) {
+        return -1;
+    }
+
+    return 0;
+}
+
+int read_message_body1(int channel_fd, Message *msg_buffer) {
+    int payload_read_result = message(channel_fd, msg_buffer);
+    return payload_read_result;
+}
+
+int receive_any(void *context, Message *msg_buffer) {
+    if (check_input1(context, msg_buffer) != 0) {
         return -1;
     }
 
@@ -244,27 +306,25 @@ int receive_any(void *context, Message *msg_buffer) {
                 continue;
             }
 
-            int channel_fd = active_proc.pipes[src_id][active_proc.pid].fd[READ];
-            int availability_check = check(channel_fd, msg_buffer);
+            int channel_fd = get_channel_fd(&active_proc, src_id);
+            int header_status = read_message_header2(channel_fd, msg_buffer);
 
-            if (availability_check == 2) {
-                continue;
+            if (header_status == 1) {
+                continue; // Retry
             }
 
-            if (availability_check < 0) {
-                fprintf(stderr, "Process %d: Error reading header from process %d\n",
-                        active_proc.pid, src_id);
+            if (header_status == -1) {
+                fprintf(stderr, "Process %d: Error reading header from process %d\n", active_proc.pid, src_id);
                 return -2;
             }
 
-            int payload_read_result = message(channel_fd, msg_buffer);
-            if (payload_read_result != 0) {
-                fprintf(stderr, "Process %d: error reading message body from process %d\n",
-                        active_proc.pid, src_id);
+            int body_read_status = read_message_body1(channel_fd, msg_buffer);
+            if (body_read_status != 0) {
+                fprintf(stderr, "Process %d: Error reading message body from process %d\n", active_proc.pid, src_id);
                 return -3;
             }
 
-            printf("Process %d: a message from process %d was successfully received and processed\n",
+            printf("Process %d: A message from process %d was successfully received and processed\n",
                    active_proc.pid, src_id);
             return 0;
         }
