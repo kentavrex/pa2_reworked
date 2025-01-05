@@ -82,6 +82,18 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
     }
 }
 
+Process initialize_child_process(local_id i, int num_processes, int *balances, Pipe **pipes) {
+    Process child_proc = {
+        .num_process = num_processes,
+        .pipes = pipes,
+        .pid = i,
+        .balance = balances[i - 1],
+        .history = {.s_id = i, .s_history_len = 0},
+        .last_time = get_physical_time()
+    };
+    return child_proc;
+}
+
 void handle_child_process(local_id i, int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process child_proc = initialize_child_process(i, num_processes, balances, pipes);
 
@@ -97,18 +109,6 @@ void handle_child_process(local_id i, int num_processes, int *balances, Pipe **p
 
     bank_operations(&child_proc, log_events);
     close_outcoming_pipes(&child_proc, log_pipes);
-}
-
-Process initialize_child_process(local_id i, int num_processes, int *balances, Pipe **pipes) {
-    Process child_proc = {
-        .num_process = num_processes,
-        .pipes = pipes,
-        .pid = i,
-        .balance = balances[i - 1],
-        .history = {.s_id = i, .s_history_len = 0},
-        .last_time = get_physical_time()
-    };
-    return child_proc;
 }
 
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
