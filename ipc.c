@@ -131,27 +131,50 @@ int validate_file_descriptor1(int fd) {
     return 0;
 }
 
+ssize_t read_data(int fd, char *buffer, size_t bytes_left) {
+    ssize_t result = read(fd, buffer, bytes_left);
+    if (result < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            return 0;
+        } else {
+            perror("Error reading message content");
+            return -1;
+        }
+    }
+    return result;
+}
+
+int handle_partial_read(ssize_t result, size_t *bytes_read, size_t payload_length) {
+    if (result == 0) {
+        fprintf(stderr, "Warning: Data not available, unexpected termination\n");
+        return -3;
+    }
+
+    *bytes_read += result;
+    if (*bytes_read < payload_length) {
+        return 0;
+    }
+    return 1;
+}
+
+
 int read_payload(int fd, char *buffer, size_t payload_length) {
     size_t bytes_read = 0;
 
     while (bytes_read < payload_length) {
-        ssize_t result = read(fd, buffer + bytes_read, payload_length - bytes_read);
+        ssize_t result = read_data(fd, buffer + bytes_read, payload_length - bytes_read);
 
         if (result < 0) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                continue;
-            } else {
-                perror("Error reading message content");
-                return -2;
-            }
+            return -2;
         }
 
-        if (result == 0) {
-            fprintf(stderr, "Warning: Data not available, unexpected termination\n");
-            return -3;
+        int status = handle_partial_read(result, &bytes_read, payload_length);
+        if (status < 0) {
+            return status;
         }
-
-        bytes_read += result;
+        if (status == 1) {
+            break;
+        }
     }
 
     if (bytes_read == payload_length) {
@@ -162,6 +185,7 @@ int read_payload(int fd, char *buffer, size_t payload_length) {
         return -4;
     }
 }
+
 
 int message(int fd, Message *msg_ptr) {
     if (validate_message_pointer1(msg_ptr) != 0) {

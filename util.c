@@ -154,19 +154,24 @@ void close_write_end(Process* pipes, int i, int j, FILE* pipe_file_ptr) {
             i, j, pipes->pipes[i][j].fd[WRITE]);
 }
 
+
+void close_pipe_based_on_condition(Process* pipes, int i, int j, FILE* pipe_file_ptr) {
+    if (i != pipes->pid && j != pipes->pid) {
+        close_full_pipe(pipes, i, j, pipe_file_ptr);
+    } else if (i == pipes->pid && j != pipes->pid) {
+        close_read_end(pipes, i, j, pipe_file_ptr);
+    } else if (j == pipes->pid && i != pipes->pid) {
+        close_write_end(pipes, i, j, pipe_file_ptr);
+    }
+}
+
 void close_non_related_pipes(Process* pipes, FILE* pipe_file_ptr) {
     int n = pipes->num_process;
 
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             if (i != j) {
-                if (i != pipes->pid && j != pipes->pid) {
-                    close_full_pipe(pipes, i, j, pipe_file_ptr);
-                } else if (i == pipes->pid && j != pipes->pid) {
-                    close_read_end(pipes, i, j, pipe_file_ptr);
-                } else if (j == pipes->pid && i != pipes->pid) {
-                    close_write_end(pipes, i, j, pipe_file_ptr);
-                }
+                close_pipe_based_on_condition(pipes, i, j, pipe_file_ptr);
             }
         }
     }
