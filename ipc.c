@@ -57,7 +57,6 @@ int send_multicast(void *context, const Message *message) {
         }
     }
     return 0;
-
 }
 
 int validate_message_pointer(Message *message) {
@@ -116,37 +115,34 @@ int check(int fd_to_read, Message *message) {
     return handle_read_status(read_status);
 }
 
-
-
-int message(int fd, Message *msg_ptr) {
+int validate_message_pointer1(Message *msg_ptr) {
     if (msg_ptr == NULL) {
         fprintf(stderr, "Error: message not initialized (NULL pointer)\n");
         return -1;
     }
+    return 0;
+}
 
+int validate_file_descriptor1(int fd) {
     if (fd < 0) {
         fprintf(stderr, "Error: Invalid file descriptor (%d)\n", fd);
         return -1;
     }
+    return 0;
+}
 
-    size_t payload_length = msg_ptr->s_header.s_payload_len;
-    if (payload_length == 0) {
-        printf("Message received with length %zu (no payload)\n", payload_length);
-        return 0;
-    }
-
+int read_payload(int fd, char *buffer, size_t payload_length) {
     size_t bytes_read = 0;
-    char *payload_buffer = (char *) &(msg_ptr->s_payload);
 
     while (bytes_read < payload_length) {
-        ssize_t result = read(fd, payload_buffer + bytes_read, payload_length - bytes_read);
+        ssize_t result = read(fd, buffer + bytes_read, payload_length - bytes_read);
 
         if (result < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 continue;
             } else {
                 perror("Error reading message content");
-                return -2; 
+                return -2;
             }
         }
 
@@ -159,13 +155,38 @@ int message(int fd, Message *msg_ptr) {
     }
 
     if (bytes_read == payload_length) {
-        printf("Successfully read message of length %zu bytes\n", payload_length);
         return 0;
     } else {
         fprintf(stderr, "Error: Payload length mismatch. Expected: %zu, read: %zu\n",
                 payload_length, bytes_read);
         return -4;
     }
+}
+
+int message(int fd, Message *msg_ptr) {
+    if (validate_message_pointer1(msg_ptr) != 0) {
+        return -1;
+    }
+
+    if (validate_file_descriptor1(fd) != 0) {
+        return -1;
+    }
+
+    size_t payload_length = msg_ptr->s_header.s_payload_len;
+
+    if (payload_length == 0) {
+        printf("Message received with length %zu (no payload)\n", payload_length);
+        return 0;
+    }
+
+    char *payload_buffer = (char *) &(msg_ptr->s_payload);
+    int result = read_payload(fd, payload_buffer, payload_length);
+
+    if (result == 0) {
+        printf("Successfully read message of length %zu bytes\n", payload_length);
+    }
+
+    return result;
 }
 
 int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
