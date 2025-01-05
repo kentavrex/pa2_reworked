@@ -208,13 +208,92 @@ void close_incoming_pipes(Process* processes, FILE* pipe_file_ptr) {
     }
 }
 
-int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
 
+int send_started_message(Process* proc, Message* msg, timestamp_t current_time) {
+    int payload_size = snprintf(msg->s_payload, sizeof(msg->s_payload), log_started_fmt,
+                                current_time, proc->pid, getpid(), getppid(), proc->balance);
+    msg->s_header.s_payload_len = payload_size;
+
+    if (payload_size < 0) {
+        fprintf(stderr, "[ERROR] Failed to format STARTED message payload.\n");
+        return -1;
+    }
+
+    if (send_multicast(proc, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to multicast STARTED message from process %d.\n", proc->pid);
+        return -1;
+    }
+    return 0;
+}
+
+int send_done_message(Process* proc, Message* msg, timestamp_t current_time) {
+    int payload_size = snprintf(msg->s_payload, sizeof(msg->s_payload), log_done_fmt,
+                                current_time, proc->pid, proc->balance);
+    msg->s_header.s_payload_len = payload_size;
+
+    if (payload_size < 0) {
+        fprintf(stderr, "[ERROR] Failed to format DONE message payload.\n");
+        return -1;
+    }
+
+    if (send_multicast(proc, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to multicast DONE message from process %d.\n", proc->pid);
+        return -1;
+    }
+    return 0;
+}
+
+int send_transfer_message(Process* proc, Message* msg, TransferOrder* transfer_order) {
+    if (transfer_order == NULL) {
+        fprintf(stderr, "[ERROR] Transfer order is NULL.\n");
+        return -1;
+    }
+
+    msg->s_header.s_payload_len = sizeof(TransferOrder);
+    memcpy(msg->s_payload, transfer_order, sizeof(TransferOrder));
+
+    if (send(proc, transfer_order->s_src, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to send TRANSFER message from process %d to process %d.\n",
+                proc->pid, transfer_order->s_src);
+        return -1;
+    }
+    return 0;
+}
+
+int send_stop_message(Process* proc, Message* msg) {
+    if (send_multicast(proc, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to multicast STOP message from process %d.\n", proc->pid);
+        return -1;
+    }
+    return 0;
+}
+
+int send_ack_message(Process* proc, Message* msg) {
+    if (send(proc, 0, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to send ACK message from process %d to parent.\n", proc->pid);
+        return -1;
+    }
+    return 0;
+}
+
+int send_balance_history_message(Process* proc, Message* msg) {
+    int payload_size = sizeof(proc->history.s_id) + sizeof(proc->history.s_history_len) +
+                       sizeof(BalanceState) * proc->history.s_history_len;
+    msg->s_header.s_payload_len = payload_size;
+    memcpy(msg->s_payload, &(proc->history), payload_size);
+
+    if (send(proc, 0, msg) != 0) {
+        fprintf(stderr, "[ERROR] Failed to send BALANCE_HISTORY message from process %d.\n", proc->pid);
+        return -1;
+    }
+    return 0;
+}
+
+int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
     if (proc == NULL) {
         fprintf(stderr, "[ERROR] Process pointer is NULL.\n");
         return -1;
     }
-
 
     if (msg_type < STARTED || msg_type > BALANCE_HISTORY) {
         fprintf(stderr, "[ERROR] Invalid message type: %d\n", msg_type);
@@ -222,102 +301,29 @@ int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_or
     }
 
     timestamp_t current_time = get_physical_time();
-    
-    
     Message msg;
     msg.s_header.s_local_time = current_time;
     msg.s_header.s_magic = MESSAGE_MAGIC;
     msg.s_header.s_type = msg_type;
     msg.s_header.s_payload_len = 0;
 
-    int payload_size = 0;
-
-
     switch (msg_type) {
         case STARTED:
-
-            payload_size = snprintf(msg.s_payload, sizeof(msg.s_payload), log_started_fmt,
-                                    current_time, proc->pid, getpid(), getppid(), proc->balance);
-            msg.s_header.s_payload_len = payload_size;
-
-
-            if (payload_size < 0) {
-                fprintf(stderr, "[ERROR] Failed to format STARTED message payload.\n");
-                return -1;
-            }
-
-
-            if (send_multicast(proc, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to multicast STARTED message from process %d.\n", proc->pid);
-                return -1;
-            }
-            break;
-
+            return send_started_message(proc, &msg, current_time);
         case DONE:
-
-            payload_size = snprintf(msg.s_payload, sizeof(msg.s_payload), log_done_fmt,
-                                    current_time, proc->pid, proc->balance);
-            msg.s_header.s_payload_len = payload_size;
-
-            if (payload_size < 0) {
-                fprintf(stderr, "[ERROR] Failed to format DONE message payload.\n");
-                return -1;
-            }
-
-
-            if (send_multicast(proc, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to multicast DONE message from process %d.\n", proc->pid);
-                return -1;
-            }
-            break;
-
+            return send_done_message(proc, &msg, current_time);
         case TRANSFER:
-
-            if (transfer_order == NULL) {
-                fprintf(stderr, "[ERROR] Transfer order is NULL.\n");
-                return -1;
-            }
-
-            msg.s_header.s_payload_len = sizeof(TransferOrder);
-            memcpy(msg.s_payload, transfer_order, sizeof(TransferOrder));
-
-            if (send(proc, transfer_order->s_src, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to send TRANSFER message from process %d to process %d.\n",
-                        proc->pid, transfer_order->s_src);
-                return -1;
-            }
-            break;
-
+            return send_transfer_message(proc, &msg, transfer_order);
         case STOP:
-            if (send_multicast(proc, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to multicast STOP message from process %d.\n", proc->pid);
-                return -1;
-            }
-            break;
-
+            return send_stop_message(proc, &msg);
         case ACK:
-            if (send(proc, 0, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to send ACK message from process %d to parent.\n", proc->pid);
-                return -1;
-            }
-            break;
-
+            return send_ack_message(proc, &msg);
         case BALANCE_HISTORY:
-            payload_size = sizeof(proc->history.s_id) + sizeof(proc->history.s_history_len) +
-                           sizeof(BalanceState) * proc->history.s_history_len;
-            msg.s_header.s_payload_len = payload_size;
-            memcpy(msg.s_payload, &(proc->history), payload_size);
-if (send(proc, 0, &msg) != 0) {
-                fprintf(stderr, "[ERROR] Failed to send BALANCE_HISTORY message from process %d.\n", proc->pid);
-                return -1;
-            }
-            break;
-
+            return send_balance_history_message(proc, &msg);
         default:
             fprintf(stderr, "[WARNING] Invalid message type for process %d.\n", proc->pid);
-            break;
+        return -1;
     }
-    return 0;
 }
 
 timestamp_t add_to_history(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
