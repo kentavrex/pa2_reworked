@@ -326,44 +326,65 @@ int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_or
     }
 }
 
-timestamp_t add_to_history(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
-    for (timestamp_t t = prev_time; t < current_time; t++) {
-        record->s_history[t] = (BalanceState) {
-            .s_balance = cur_balance,
-            .s_balance_pending_in = 0,
-            .s_time = t
-        };
-    }
+void update_balance_history(BalanceHistory* record, timestamp_t t, balance_t cur_balance) {
+    record->s_history[t] = (BalanceState) {
+        .s_balance = cur_balance,
+        .s_balance_pending_in = 0,
+        .s_time = t
+    };
+}
 
+void update_final_balance_history(BalanceHistory* record, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
     record->s_history[current_time] = (BalanceState) {
         .s_balance = cur_balance + delta,
         .s_balance_pending_in = 0,
         .s_time = current_time
     };
+}
 
+void set_history_length(BalanceHistory* record, timestamp_t current_time) {
     record->s_history_len = current_time + 1;
-    
+}
+
+timestamp_t add_to_history(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
+    for (timestamp_t t = prev_time; t < current_time; t++) {
+        update_balance_history(record, t, cur_balance);
+    }
+
+    update_final_balance_history(record, current_time, cur_balance, delta);
+    set_history_length(record, current_time);
+
     return current_time;
 }
 
-int check_all_received(Process* process, MessageType type) {
+int receive_message(Process* process, int pid, Message* msg) {
+    if (receive(process, pid, msg) == -1) {
+        printf("Error while receiving message from process %d\n", pid);
+        return -1;
+    }
+    return 0;
+}
+
+int count_messages_of_type(Process* process, MessageType type) {
     int count = 0;
-    for (int i = 1; i < process->num_process; i++)
-    {
+    for (int i = 1; i < process->num_process; i++) {
         if (i != process->pid) {
             Message msg;
-            if (receive(process, i, &msg) == -1) {
-                printf("Error while recieving messages\n");
+            if (receive_message(process, i, &msg) == -1) {
                 return -1;
             }
             if (msg.s_header.s_type == type) {
                 count++;
-                printf("Process %d readed %d messages with type %s\n", 
-                    process->pid, count, type == 0 ? "STARTED" : "DONE");
+                printf("Process %d readed %d messages with type %s\n",
+                       process->pid, count, type == 0 ? "STARTED" : "DONE");
             }
         }
     }
-    if (process->pid != 0 && count == process->num_process-2) { 
+    return count;
+}
+
+int check_received_for_process(Process* process, int count) {
+    if (process->pid != 0 && count == process->num_process - 2) {
         return 0;
     } else if (process->pid == 0 && count == process->num_process - 1) {
         return 0;
@@ -371,50 +392,71 @@ int check_all_received(Process* process, MessageType type) {
     return -1;
 }
 
-Pipe** init_pipes(int process_count, FILE* log_fp) {
+int check_all_received(Process* process, MessageType type) {
+    int count = count_messages_of_type(process, type);
+    if (count == -1) {
+        return -1;
+    }
+    return check_received_for_process(process, count);
+}
 
+int create_pipe(Pipe* pipe_n) {
+    if (pipe(pipe_n->fd) != 0) {
+        perror("Pipe creation failed");
+        return -1;
+    }
+    return 0;
+}
+
+int set_nonblocking_mode(int fd) {
+    int flags = fcntl(fd, F_GETFL);
+    if (flags == -1) {
+        perror("Error retrieving flags for pipe");
+        return -1;
+    }
+
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1) {
+        perror("Failed to set non-blocking mode for pipe");
+        return -1;
+    }
+    return 0;
+}
+
+int init_single_pipe(Pipe* pipe, FILE* log_fp, int src, int dest) {
+    if (create_pipe(pipe) != 0) {
+        return -1;
+    }
+
+    if (set_nonblocking_mode(pipe->fd[READ]) != 0) {
+        return -1;
+    }
+
+    if (set_nonblocking_mode(pipe->fd[WRITE]) != 0) {
+        return -1;
+    }
+
+    fprintf(log_fp, "Pipe initialized: from process %d to process %d (write: %d, read: %d)\n",
+            src, dest, pipe->fd[WRITE], pipe->fd[READ]);
+
+    return 0;
+}
+
+Pipe** init_pipes(int process_count, FILE* log_fp) {
     Pipe** pipes = (Pipe**) malloc(process_count * sizeof(Pipe*));
 
     for (int i = 0; i < process_count; i++) {
         pipes[i] = (Pipe*) malloc(process_count * sizeof(Pipe));
     }
 
-
     for (int src = 0; src < process_count; src++) {
         for (int dest = 0; dest < process_count; dest++) {
             if (src == dest) {
-                continue; 
+                continue;
             }
 
-
-            if (pipe(pipes[src][dest].fd) != 0) {
-                perror("Pipe creation failed");
-                exit(EXIT_FAILURE);
+            if (init_single_pipe(&pipes[src][dest], log_fp, src, dest) != 0) {
+                return NULL; // Ошибка при инициализации трубы
             }
-
-
-            int flags_read = fcntl(pipes[src][dest].fd[READ], F_GETFL);
-            int flags_write = fcntl(pipes[src][dest].fd[WRITE], F_GETFL);
-
-            if (flags_read == -1 || flags_write == -1) {
-                perror("Error retrieving flags for pipe");
-                exit(EXIT_FAILURE);
-            }
-
-
-            if (fcntl(pipes[src][dest].fd[READ], F_SETFL, flags_read | O_NONBLOCK) == -1) {
-                perror("Failed to set non-blocking mode for read end of pipe");
-                exit(EXIT_FAILURE);
-            }
-
-            if (fcntl(pipes[src][dest].fd[WRITE], F_SETFL, flags_write | O_NONBLOCK) == -1) {
-                perror("Failed to set non-blocking mode for write end of pipe");
-                exit(EXIT_FAILURE);
-            }
-
-
-            fprintf(log_fp, "Pipe initialized: from process %d to process %d (write: %d, read: %d)\n", 
-                    src, dest, pipes[src][dest].fd[WRITE], pipes[src][dest].fd[READ]);
         }
     }
 
