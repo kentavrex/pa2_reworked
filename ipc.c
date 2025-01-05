@@ -2,34 +2,57 @@
 #include "const.h"
 #include <errno.h>
 
+int get_write_fd(Process *current_process, local_id destination) {
+    return current_process->pipes[current_process->pid][destination].fd[WRITE];
+}
+
+void log_fd_info(Process *current_process, local_id destination, int write_fd) {
+    int read_fd = current_process->pipes[current_process->pid][destination].fd[READ];
+    printf("Process %d writes to file descriptor: write: %d, read: %d\n",
+           current_process->pid, write_fd, read_fd);
+}
+
+ssize_t write_message(int write_fd, const Message *message) {
+    return write(write_fd, &(message->s_header), sizeof(MessageHeader) + message->s_header.s_payload_len);
+}
+
+void log_message_written(const Message *message) {
+    printf("Recorded message of length: %d\n", message->s_header.s_payload_len);
+}
+
 int send(void *context, local_id destination, const Message *message) {
     Process *proc_ptr = (Process *) context;
     Process current_process = *proc_ptr;
-    
-    int write_fd = current_process.pipes[current_process.pid][destination].fd[WRITE];
-    printf("Process %d writes to file descriptor: write: %d, read: %d\n",
-           current_process.pid, write_fd, current_process.pipes[current_process.pid][destination].fd[READ]);
-    
-    ssize_t bytes_written = write(write_fd, &(message->s_header), sizeof(MessageHeader) + message->s_header.s_payload_len);
+    int write_fd = get_write_fd(&current_process, destination);
+    log_fd_info(&current_process, destination, write_fd);
+    ssize_t bytes_written = write_message(write_fd, message);
     if (bytes_written < 0) {
         fprintf(stderr, "Error writing from process %d to process %d\n", current_process.pid, destination);
         return -1;
     }
-    
-    printf("Recorded message of length: %d\n", message->s_header.s_payload_len);
+    log_message_written(message);
     return 0;
 }
+
+
+int should_skip_process(int current_pid, int target_pid) {
+    return current_pid == target_pid;
+}
+
+int send_to_process(Process *current_proc, int target_pid, const Message *message) {
+    return send(current_proc, target_pid, message);
+}
+
 int send_multicast(void *context, const Message *message) {
-    Process *proc_ptr = (Process *) context;
+    Process *proc_ptr = (Process *)context;
     Process current_proc = *proc_ptr;
-    
+
     for (int idx = 0; idx < current_proc.num_process; idx++) {
-        if (idx == current_proc.pid) {
+        if (should_skip_process(current_proc.pid, idx)) {
             continue;
         }
-        
-        if (send(&current_proc, idx, message) < 0) {
-            fprintf(stderr, "Error when multicasting from process %d to process %d\n", current_proc.pid, idx);
+
+        if (send_to_process(&current_proc, idx, message) < 0) {
             return -1;
         }
     }
