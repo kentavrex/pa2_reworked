@@ -164,6 +164,12 @@ void close_pipes_and_wait(Process* parent_proc, FILE* log_pipes, FILE* log_event
     while (wait(NULL) > 0);
 }
 
+void handle_error_and_exit(FILE *log_pipes, FILE *log_events) {
+    fclose(log_pipes);
+    fclose(log_events);
+    exit(EXIT_FAILURE);
+}
+
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process parent_proc = {
         .num_process = num_processes,
@@ -174,9 +180,7 @@ void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FIL
     close_unrelated_pipes_and_log(&parent_proc, log_pipes);
 
     if (wait_for_all_started_messages(&parent_proc, log_events) != 0) {
-        fclose(log_pipes);
-        fclose(log_events);
-        exit(EXIT_FAILURE);
+        handle_error_and_exit(log_pipes, log_events);
     }
 
     perform_bank_robbery(&parent_proc, num_processes);
@@ -184,15 +188,14 @@ void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FIL
     send_message(&parent_proc, STOP, NULL);
 
     if (wait_for_all_done_messages(&parent_proc, log_events) != 0) {
-        fclose(log_pipes);
-        fclose(log_events);
-        exit(EXIT_FAILURE);
+        handle_error_and_exit(log_pipes, log_events);
     }
 
     histories(&parent_proc);
 
     close_pipes_and_wait(&parent_proc, log_pipes, log_events);
 }
+
 
 
 int main(int argc, char *argv[]) {
