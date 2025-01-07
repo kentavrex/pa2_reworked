@@ -558,10 +558,15 @@ int initialize_pipes(Pipe** pipes, int process_count, FILE* log_fp) {
             check_state();
         }
         for (int dest = 0; dest < process_count; dest++) {
+            if (1){
+                check_state();
+            }
             if (src == dest) {
                 continue;
             }
-
+            if (1){
+                check_state();
+            }
             if (init_single_pipe(&pipes[src][dest], log_fp, src, dest) != 0) {
                 return -1;
             }

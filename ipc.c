@@ -256,9 +256,15 @@ int message(int fd, Message *msg_ptr) {
 }
 
 int check_input(void *process_context, Message *msg_buffer) {
+    if (1){
+        check_state_ipc();
+    }
     if (process_context == NULL || msg_buffer == NULL) {
         fprintf(stderr, "Error: invalid process or message (NULL pointer)\n");
         return -1;
+    }
+    if (1){
+        check_state_ipc();
     }
     return 0;
 }
@@ -438,10 +444,11 @@ int try_receive_message(Process *proc_info, local_id src_id, Message *msg_buffer
 
 int receive_from_all_except_self(Process *proc_info, Message *msg_buffer) {
     while (1) {
-        if (1){
-            check_state_ipc();
-        }
+        if (1) check_state_ipc();
         for (local_id src_id = 0; src_id < proc_info->num_process; ++src_id) {
+            if (1){
+                check_state_ipc();
+            }
             if (src_id == proc_info->pid) {
                 continue;
             }
