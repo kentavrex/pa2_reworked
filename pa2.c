@@ -52,7 +52,7 @@ FILE *open_log_file(const char *filename) {
     return log_file;
 }
 
-void validate_arguments(int argc, int num_processes) {
+void validate_arguments2(int argc, int num_processes) {
     if (argc < num_processes + 2) {
         fprintf(stderr, "Provide initial balance values for each process\n");
         exit(1);
@@ -75,7 +75,7 @@ void populate_balances(int argc, char *argv[], int num_processes, int *balances)
 }
 
 void parse_initial_balances(int argc, char *argv[], int num_processes, int *balances) {
-    validate_arguments(argc, num_processes);
+    validate_arguments2(argc, num_processes);
     populate_balances(argc, argv, num_processes, balances);
 }
 
