@@ -79,7 +79,7 @@ ssize_t read_message_header(int fd_to_read, MessageHeader *header) {
     return read(fd_to_read, header, sizeof(MessageHeader));
 }
 
-int handle_read_status(ssize_t read_status) {
+int handle_read_error(ssize_t read_status) {
     if (read_status == -1) {
         if (errno == EAGAIN) {
             return 2;
@@ -88,19 +88,40 @@ int handle_read_status(ssize_t read_status) {
             return 1;
         }
     }
+    return -1;
+}
 
+int handle_end_of_file(ssize_t read_status) {
     if (read_status == 0) {
         fprintf(stderr, "Attention: end of file or no data\n");
         return 2;
     }
+    return -1;
+}
 
+int check_data_size(ssize_t read_status) {
     if (read_status < sizeof(MessageHeader)) {
         fprintf(stderr, "Error: Less data read than expected (%zd bytes)\n", read_status);
         return 1;
     }
+    return -1;
+}
+
+int handle_read_status(ssize_t read_status) {
+    int result;
+
+    result = handle_read_error(read_status);
+    if (result != -1) return result;
+
+    result = handle_end_of_file(read_status);
+    if (result != -1) return result;
+
+    result = check_data_size(read_status);
+    if (result != -1) return result;
 
     return 0;
 }
+
 
 int check(int fd_to_read, Message *message) {
     if (validate_message_pointer(message) < 0) {
@@ -250,40 +271,8 @@ int read_message_body(int read_descriptor, Message *msg_buffer) {
     return body_read_status;
 }
 
-int check_input1(void *context, Message *msg_buffer) {
-    if (context == NULL || msg_buffer == NULL) {
-        fprintf(stderr, "Error: invalid context or message buffer (NULL value)\n");
-        return -1;
-    }
-    return 0;
-}
-
-int process_header(int read_descriptor, Message *msg_buffer, local_id sender_id) {
-    int header_status = read_message_header1(read_descriptor, msg_buffer);
-
-    if (header_status == 1) {
-        return 0;  // Continue reading
-    }
-
-    if (header_status == 0) {
-        return 0;  // Successfully read header
-    }
-
-    fprintf(stderr, "Error reading header from process %d\n", sender_id);
-    return -1;
-}
-
-int process_body(int read_descriptor, Message *msg_buffer, local_id sender_id) {
-    int body_read_status = read_message_body(read_descriptor, msg_buffer);
-    if (body_read_status != 0) {
-        fprintf(stderr, "Error reading message body from process %d\n", sender_id);
-        return -1;
-    }
-    return 0;
-}
-
 int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
-    if (check_input1(process_context, msg_buffer) != 0) {
+    if (check_input(process_context, msg_buffer) != 0) {
         return -1;
     }
 
@@ -293,11 +282,24 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
     int read_descriptor, write_descriptor;
     get_pipe_descriptors(&active_proc, sender_id, &read_descriptor, &write_descriptor);
 
-    if (process_header(read_descriptor, msg_buffer, sender_id) != 0) {
+    while (1) {
+        int header_status = read_message_header1(read_descriptor, msg_buffer);
+
+        if (header_status == 1) {
+            continue;
+        }
+
+        if (header_status == 0) {
+            break;
+        }
+
+        fprintf(stderr, "Error reading header from process %d\n", sender_id);
         return -2;
     }
 
-    if (process_body(read_descriptor, msg_buffer, sender_id) != 0) {
+    int body_read_status = read_message_body(read_descriptor, msg_buffer);
+    if (body_read_status != 0) {
+        fprintf(stderr, "Error reading message body from process %d\n", sender_id);
         return -3;
     }
 
@@ -305,6 +307,14 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
     return 0;
 }
 
+
+int check_input1(void *context, Message *msg_buffer) {
+    if (context == NULL || msg_buffer == NULL) {
+        fprintf(stderr, "Error: invalid context or message buffer (NULL value)\n");
+        return -1;
+    }
+    return 0;
+}
 
 int get_channel_fd(Process *active_proc, local_id src_id) {
     return active_proc->pipes[src_id][active_proc->pid].fd[READ];
