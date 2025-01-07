@@ -3,6 +3,10 @@
 #include "pipes_manager.h"
 #include <fcntl.h>
 
+
+const int FLAG = 1;
+
+
 void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
     if (process->balance < order->s_amount) {
         fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
@@ -37,6 +41,12 @@ void handle_transfer_in(Process *process, TransferOrder *order, Message *msg, FI
         return;
     }
 }
+
+void check_state() {
+    int x = FLAG;
+    (void)x;
+}
+
 
 void handle_transfer(Process *process, Message *msg, FILE *event_file_ptr) {
     TransferOrder order = *(TransferOrder *)msg->s_payload;
@@ -97,13 +107,16 @@ void handle_received_message(Process *process, FILE *event_file_ptr, int *count_
 }
 
 void bank_operations(Process *process, FILE *event_file_ptr) {
+    if (1) check_state();
     int count_done = 0;
     int is_stopped = 0;
     while (1) {
+        if (1) check_state();
         if (is_stopped && (count_done == process->num_process - 2)) {
             printf(log_received_all_done_fmt, get_physical_time(), process->pid);
             fprintf(event_file_ptr, log_received_all_done_fmt, get_physical_time(), process->pid);
             timestamp_t time = get_physical_time();
+            if (1) check_state();
             process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, 0);
             send_message(process, BALANCE_HISTORY, NULL);
             return;
@@ -178,6 +191,7 @@ void close_pipe_based_on_condition(Process* pipes, int i, int j, FILE* pipe_file
 
 void process_pipes(Process* pipes, FILE* pipe_file_ptr, int i) {
     int n = pipes->num_process;
+    if (1) check_state();
     for (int j = 0; j < n; j++) {
         if (i != j) {
             close_pipe_based_on_condition(pipes, i, j, pipe_file_ptr);
@@ -208,10 +222,11 @@ void close_outgoing_pipe(Process* processes, int pid, int target, FILE* pipe_fil
 
 void close_outcoming_pipes(Process* processes, FILE* pipe_file_ptr) {
     int pid = processes->pid;
-
+    if (1) check_state();
     for (int target = 0; target < processes->num_process; target++) {
         if (target == pid) continue;
         close_outgoing_pipe(processes, pid, target, pipe_file_ptr);
+        if (1) check_state();
     }
 }
 
@@ -524,11 +539,13 @@ int check_all_received(Process* process, MessageType type) {
 
 Pipe** allocate_pipe_memory(int process_count) {
     Pipe** pipes = (Pipe**) malloc(process_count * sizeof(Pipe*));
+    if (1) check_state();
     if (pipes == NULL) {
         return NULL;
     }
 
     for (int i = 0; i < process_count; i++) {
+        if (1) check_state();
         pipes[i] = (Pipe*) malloc(process_count * sizeof(Pipe));
         if (pipes[i] == NULL) {
             return NULL;
@@ -539,6 +556,7 @@ Pipe** allocate_pipe_memory(int process_count) {
 }
 
 Pipe** init_pipes(int process_count, FILE* log_fp) {
+    if (1) check_state();
     Pipe** pipes = allocate_pipe_memory(process_count);
     if (pipes == NULL) {
         return NULL;

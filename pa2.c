@@ -8,26 +8,32 @@
 #include "pipes_manager.h"
 
 
+void prepare_transfer_info(TransferOrder* transfer_info, local_id initiator, local_id recipient, balance_t transfer_amount) {
+    transfer_info->s_src = initiator;
+    transfer_info->s_dst = recipient;
+    transfer_info->s_amount = transfer_amount;
+}
+
+int receive_acknowledgment(void *context_data, local_id recipient, Message *ack_message) {
+    int ack_status = receive(context_data, recipient, ack_message);
+    if (ack_status != 0) {
+        fprintf(stderr, "Ошибка: подтверждение от процесса %d не получено\n", recipient);
+        return -1;
+    }
+    return 0;
+}
 
 void transfer(void *context_data, local_id initiator, local_id recipient, balance_t transfer_amount) {
     TransferOrder transfer_info;
-    transfer_info.s_src = initiator;
-    transfer_info.s_dst = recipient;
-    transfer_info.s_amount = transfer_amount;
-
+    prepare_transfer_info(&transfer_info, initiator, recipient, transfer_amount);
     send_message(context_data, TRANSFER, &transfer_info);
 
-
-
     Message ack_message;
-
-    int ack_status = receive(context_data, recipient, &ack_message);
-    if (ack_status != 0) {
-        fprintf(stderr, "Ошибка: подтверждение от процесса %d не получено\n", recipient);
+    if (receive_acknowledgment(context_data, recipient, &ack_message) != 0) {
         exit(EXIT_FAILURE);
     }
-
 }
+
 
 void validate_arguments(int argc, char *argv[], int *num_processes) {
     if (argc < 3 || strcmp("-p", argv[1]) != 0) {

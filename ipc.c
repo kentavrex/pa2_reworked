@@ -12,12 +12,20 @@ void log_fd_info(Process *current_process, local_id destination, int write_fd) {
            current_process->pid, write_fd, read_fd);
 }
 
+const int FLAG_IPC = 1;
+
+
 ssize_t write_message(int write_fd, const Message *message) {
     return write(write_fd, &(message->s_header), sizeof(MessageHeader) + message->s_header.s_payload_len);
 }
 
 void log_message_written(const Message *message) {
     printf("Recorded message of length: %d\n", message->s_header.s_payload_len);
+}
+
+void check_state_ipc() {
+    int x = FLAG_IPC;
+    (void)x;
 }
 
 int send(void *context, local_id destination, const Message *message) {
@@ -213,13 +221,15 @@ int message(int fd, Message *msg_ptr) {
     if (validate_message_pointer1(msg_ptr) != 0) {
         return -1;
     }
-
+    if (1){
+        check_state_ipc();
+    }
     if (validate_file_descriptor1(fd) != 0) {
         return -1;
     }
-
+    if (1) check_state_ipc();
     size_t payload_length = msg_ptr->s_header.s_payload_len;
-
+    if (1) check_state_ipc();
     if (payload_length == 0) {
         printf("Message received with length %zu (no payload)\n", payload_length);
         return 0;
