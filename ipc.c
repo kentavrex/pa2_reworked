@@ -250,8 +250,40 @@ int read_message_body(int read_descriptor, Message *msg_buffer) {
     return body_read_status;
 }
 
+int check_input1(void *context, Message *msg_buffer) {
+    if (context == NULL || msg_buffer == NULL) {
+        fprintf(stderr, "Error: invalid context or message buffer (NULL value)\n");
+        return -1;
+    }
+    return 0;
+}
+
+int process_header(int read_descriptor, Message *msg_buffer, local_id sender_id) {
+    int header_status = read_message_header1(read_descriptor, msg_buffer);
+
+    if (header_status == 1) {
+        return 0;  // Continue reading
+    }
+
+    if (header_status == 0) {
+        return 0;  // Successfully read header
+    }
+
+    fprintf(stderr, "Error reading header from process %d\n", sender_id);
+    return -1;
+}
+
+int process_body(int read_descriptor, Message *msg_buffer, local_id sender_id) {
+    int body_read_status = read_message_body(read_descriptor, msg_buffer);
+    if (body_read_status != 0) {
+        fprintf(stderr, "Error reading message body from process %d\n", sender_id);
+        return -1;
+    }
+    return 0;
+}
+
 int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
-    if (check_input(process_context, msg_buffer) != 0) {
+    if (check_input1(process_context, msg_buffer) != 0) {
         return -1;
     }
 
@@ -261,24 +293,11 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
     int read_descriptor, write_descriptor;
     get_pipe_descriptors(&active_proc, sender_id, &read_descriptor, &write_descriptor);
 
-    while (1) {
-        int header_status = read_message_header1(read_descriptor, msg_buffer);
-
-        if (header_status == 1) {
-            continue;
-        }
-
-        if (header_status == 0) {
-            break;
-        }
-
-        fprintf(stderr, "Error reading header from process %d\n", sender_id);
+    if (process_header(read_descriptor, msg_buffer, sender_id) != 0) {
         return -2;
     }
 
-    int body_read_status = read_message_body(read_descriptor, msg_buffer);
-    if (body_read_status != 0) {
-        fprintf(stderr, "Error reading message body from process %d\n", sender_id);
+    if (process_body(read_descriptor, msg_buffer, sender_id) != 0) {
         return -3;
     }
 
@@ -286,14 +305,6 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
     return 0;
 }
 
-
-int check_input1(void *context, Message *msg_buffer) {
-    if (context == NULL || msg_buffer == NULL) {
-        fprintf(stderr, "Error: invalid context or message buffer (NULL value)\n");
-        return -1;
-    }
-    return 0;
-}
 
 int get_channel_fd(Process *active_proc, local_id src_id) {
     return active_proc->pipes[src_id][active_proc->pid].fd[READ];
