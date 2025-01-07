@@ -3,41 +3,52 @@
 #include "pipes_manager.h"
 #include <fcntl.h>
 
+void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
+    if (process->balance < order->s_amount) {
+        fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
+        return;
+    }
+
+    msg->s_header.s_local_time = get_physical_time();
+    timestamp_t time = msg->s_header.s_local_time;
+    process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order->s_amount);
+    process->balance -= order->s_amount;
+
+    fprintf(event_file_ptr, log_transfer_out_fmt, time, order->s_src, order->s_amount, order->s_dst);
+    printf(log_transfer_out_fmt, time, order->s_src, order->s_amount, order->s_dst);
+
+    if (send(process, order->s_dst, msg) == -1) {
+        fprintf(stderr, "Error sending transfer from process %d to process %d\n", process->pid, order->s_dst);
+        return;
+    }
+}
+
+void handle_transfer_in(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
+    msg->s_header.s_local_time = get_physical_time();
+    timestamp_t time = msg->s_header.s_local_time;
+    process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, order->s_amount);
+    process->balance += order->s_amount;
+
+    fprintf(event_file_ptr, log_transfer_in_fmt, time, order->s_dst, order->s_amount, order->s_src);
+    printf(log_transfer_in_fmt, time, order->s_dst, order->s_amount, order->s_src);
+
+    if (send_message(process, ACK, NULL) == -1) {
+        fprintf(stderr, "Error sending ACK from process %d to process %d\n", process->pid, order->s_src);
+        return;
+    }
+}
+
 void handle_transfer(Process *process, Message *msg, FILE *event_file_ptr) {
     TransferOrder order = *(TransferOrder *)msg->s_payload;
     printf("Order src number is %d WHILE PROCESS PID is %d\n", order.s_src, process->pid);
 
     if (order.s_src == process->pid) {
-        if (process->balance < order.s_amount) {
-            fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
-            return;
-        }
-
-        msg->s_header.s_local_time = get_physical_time();
-        timestamp_t time = msg->s_header.s_local_time;
-        process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order.s_amount);
-        process->balance -= order.s_amount;
-
-        fprintf(event_file_ptr, log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
-        printf(log_transfer_out_fmt, time, order.s_src, order.s_amount, order.s_dst);
-        if (send(process, order.s_dst, msg) == -1) {
-            fprintf(stderr, "Error sending transfer from process %d to process %d\n", process->pid, order.s_dst);
-            return;
-        }
+        handle_transfer_out(process, &order, msg, event_file_ptr);
     } else {
-        msg->s_header.s_local_time = get_physical_time();
-        int time = msg->s_header.s_local_time;
-        process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, order.s_amount);
-        process->balance += order.s_amount;
-
-        fprintf(event_file_ptr, log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
-        printf(log_transfer_in_fmt, time, order.s_dst, order.s_amount, order.s_src);
-        if (send_message(process, ACK, NULL) == -1) {
-            fprintf(stderr, "Error sending ACK from process %d to process %d\n", process->pid, order.s_src);
-            return;
-        }
+        handle_transfer_in(process, &order, msg, event_file_ptr);
     }
 }
+
 
 void handle_stop(Process *process, int *is_stopped, FILE *event_file_ptr) {
     (*is_stopped)++;
