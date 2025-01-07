@@ -1,6 +1,6 @@
-#include "const.h"
-#include "util.h"
-#include "pipes_manager.h"
+#include "base_vars.h"
+#include "helpers.h"
+#include "pipe_helper.h"
 #include <fcntl.h>
 
 

@@ -1,5 +1,5 @@
-#include "util.h"
-#include "const.h"
+#include "helpers.h"
+#include "base_vars.h"
 #include <errno.h>
 
 int get_write_fd(Process *current_process, local_id destination) {
