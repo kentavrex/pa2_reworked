@@ -158,32 +158,33 @@ int handle_partial_read(ssize_t result, size_t *bytes_read, size_t payload_lengt
 }
 
 
+int read_and_handle_data(int fd, char *buffer, size_t *bytes_read, size_t payload_length) {
+    ssize_t result = read_data(fd, buffer + *bytes_read, payload_length - *bytes_read);
+    if (result < 0) return -2;
+    return handle_partial_read(result, bytes_read, payload_length);
+}
+
+int process_read_loop(int fd, char *buffer, size_t payload_length, size_t *bytes_read) {
+    while (*bytes_read < payload_length) {
+        int status = read_and_handle_data(fd, buffer, bytes_read, payload_length);
+        if (status < 0) return status;
+        if (status == 1) break;
+    }
+    return 0;
+}
+
+int check_payload_completion(size_t bytes_read, size_t payload_length) {
+    if (bytes_read == payload_length) return 0;
+    fprintf(stderr, "Error: Payload length mismatch. Expected: %zu, read: %zu\n",
+            payload_length, bytes_read);
+    return -4;
+}
+
 int read_payload(int fd, char *buffer, size_t payload_length) {
     size_t bytes_read = 0;
-
-    while (bytes_read < payload_length) {
-        ssize_t result = read_data(fd, buffer + bytes_read, payload_length - bytes_read);
-
-        if (result < 0) {
-            return -2;
-        }
-
-        int status = handle_partial_read(result, &bytes_read, payload_length);
-        if (status < 0) {
-            return status;
-        }
-        if (status == 1) {
-            break;
-        }
-    }
-
-    if (bytes_read == payload_length) {
-        return 0;
-    } else {
-        fprintf(stderr, "Error: Payload length mismatch. Expected: %zu, read: %zu\n",
-                payload_length, bytes_read);
-        return -4;
-    }
+    int loop_status = process_read_loop(fd, buffer, payload_length, &bytes_read);
+    if (loop_status < 0) return loop_status;
+    return check_payload_completion(bytes_read, payload_length);
 }
 
 
