@@ -7,11 +7,30 @@
 const int FLAG = 1;
 
 
+
+void handle_stop(Process *process, int *is_stopped, FILE *event_file_ptr) {
+    (*is_stopped)++;
+    if (*is_stopped > 1) {
+        fprintf(stderr, "Error: Process %d received multiple STOP signals\n", process->pid);
+        exit(1);
+    }
+
+    if (mess_to(process, DONE, NULL) == -1) {
+        fprintf(stderr, "Error sending DONE message from process %d\n", process->pid);
+        exit(1);
+    }
+    printf(log_done_fmt, get_physical_time(), process->pid, process->balance);
+    fprintf(event_file_ptr, log_done_fmt, get_physical_time(), process->pid, process->balance);
+}
+
+void handle_done(Process *process, int *count_done) {
+    (*count_done)++;
+}
+
 void check_state() {
     int x = FLAG;
     (void)x;
 }
-
 
 void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
     if (1){
@@ -68,26 +87,6 @@ void handle_transfer(Process *process, Message *msg, FILE *event_file_ptr) {
     } else {
         handle_transfer_in(process, &order, msg, event_file_ptr);
     }
-}
-
-
-void handle_stop(Process *process, int *is_stopped, FILE *event_file_ptr) {
-    (*is_stopped)++;
-    if (*is_stopped > 1) {
-        fprintf(stderr, "Error: Process %d received multiple STOP signals\n", process->pid);
-        exit(1);
-    }
-
-    if (mess_to(process, DONE, NULL) == -1) {
-        fprintf(stderr, "Error sending DONE message from process %d\n", process->pid);
-        exit(1);
-    }
-    printf(log_done_fmt, get_physical_time(), process->pid, process->balance);
-    fprintf(event_file_ptr, log_done_fmt, get_physical_time(), process->pid, process->balance);
-}
-
-void handle_done(Process *process, int *count_done) {
-    (*count_done)++;
 }
 
 void handle_received_message(Process *process, FILE *event_file_ptr, int *count_done, int *is_stopped) {
