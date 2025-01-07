@@ -360,29 +360,49 @@ int receive_message_from_process(int channel_fd, Message *msg_buffer, int pid, i
     return 0;
 }
 
-int receive_any(void *context, Message *msg_buffer) {
-    if (check_input1(context, msg_buffer) != 0) {
-        return -1;
+int validate_input(void *context, Message *msg_buffer) {
+    return check_input1(context, msg_buffer);
+}
+
+int try_receive_message(Process *proc_info, local_id src_id, Message *msg_buffer) {
+    int channel_fd = get_channel_fd(proc_info, src_id);
+    int result = receive_message_from_process(channel_fd, msg_buffer, proc_info->pid, src_id);
+
+    if (result == 0) {
+        printf("Process %d: A message from process %d was successfully received and processed\n",
+               proc_info->pid, src_id);
+        return 0;
     }
-    Process *proc_info = (Process *)context;
-    Process active_proc = *proc_info;
+    return result;
+}
+
+int receive_from_all_except_self(Process *proc_info, Message *msg_buffer) {
     while (1) {
-        for (local_id src_id = 0; src_id < active_proc.num_process; ++src_id) {
-            if (src_id == active_proc.pid) {
+        for (local_id src_id = 0; src_id < proc_info->num_process; ++src_id) {
+            if (src_id == proc_info->pid) {
                 continue;
             }
-            int channel_fd = get_channel_fd(&active_proc, src_id);
-            int result = receive_message_from_process(channel_fd, msg_buffer, active_proc.pid, src_id);
 
+            int result = try_receive_message(proc_info, src_id, msg_buffer);
             if (result == 0) {
-                printf("Process %d: A message from process %d was successfully received and processed\n",
-                       active_proc.pid, src_id);
                 return 0;
-            } else if (result == 1) {
-                continue;
             }
         }
     }
-    log_error("Process %d: Failed to receive message from any process\n", active_proc.pid, -1);
     return -3;
+}
+
+int receive_any(void *context, Message *msg_buffer) {
+    if (validate_input(context, msg_buffer) != 0) {
+        return -1;
+    }
+
+    Process *proc_info = (Process *)context;
+    int result = receive_from_all_except_self(proc_info, msg_buffer);
+
+    if (result == -3) {
+        log_error("Process %d: Failed to receive message from any process\n", proc_info->pid, result);
+    }
+
+    return result;
 }
