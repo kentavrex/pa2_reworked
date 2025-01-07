@@ -80,40 +80,53 @@ void parse_initial_balances(int argc, char *argv[], int num_processes, int *bala
 }
 
 
-void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
-    for (local_id i = 1; i < num_processes; ++i) {
-        pid_t pid = fork();
-        if (pid < 0) {
-            perror("Fork failed");
-            exit(EXIT_FAILURE);
-        }
-        if (pid == 0) {
-            Process child_proc = {
-                .num_process = num_processes,
-                .pipes = pipes,
-                .pid = i,
-                .balance = balances[i - 1],
-                .history = {.s_id = i, .s_history_len = 0},
-                .last_time = get_physical_time()
-            };
+void handle_fork_failure() {
+    perror("Fork failed");
+    exit(EXIT_FAILURE);
+}
 
-            close_non_related_pipes(&child_proc, log_pipes);
-            send_message(&child_proc, STARTED, NULL);
+void setup_child_process(int num_processes, int *balances, Pipe **pipes, int id, FILE *log_pipes, FILE *log_events) {
+    Process child_proc = {
+        .num_process = num_processes,
+        .pipes = pipes,
+        .pid = id,
+        .balance = balances[id - 1],
+        .history = {.s_id = id, .s_history_len = 0},
+        .last_time = get_physical_time()
+    };
 
-            fprintf(log_events, log_started_fmt, get_physical_time(), i, getpid(), getppid(), child_proc.balance);
-            if (check_all_received(&child_proc, STARTED) != 0) {
-                fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", i);
-                exit(EXIT_FAILURE);
-            }
-            fprintf(log_events, log_received_all_started_fmt, get_physical_time(), i);
+    close_non_related_pipes(&child_proc, log_pipes);
+    send_message(&child_proc, STARTED, NULL);
 
-            bank_operations(&child_proc, log_events);
+    fprintf(log_events, log_started_fmt, get_physical_time(), id, getpid(), getppid(), child_proc.balance);
+    if (check_all_received(&child_proc, STARTED) != 0) {
+        fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", id);
+        exit(EXIT_FAILURE);
+    }
+    fprintf(log_events, log_received_all_started_fmt, get_physical_time(), id);
 
-            close_outcoming_pipes(&child_proc, log_pipes);
-            exit(EXIT_SUCCESS);
-        }
+    bank_operations(&child_proc, log_events);
+
+    close_outcoming_pipes(&child_proc, log_pipes);
+    exit(EXIT_SUCCESS);
+}
+
+void create_child_process(local_id id, int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
+    pid_t pid = fork();
+    if (pid < 0) {
+        handle_fork_failure();
+    }
+    if (pid == 0) {
+        setup_child_process(num_processes, balances, pipes, id, log_pipes, log_events);
     }
 }
+
+void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
+    for (local_id i = 1; i < num_processes; ++i) {
+        create_child_process(i, num_processes, balances, pipes, log_pipes, log_events);
+    }
+}
+
 
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process parent_proc = {
