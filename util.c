@@ -314,42 +314,65 @@ int send_balance_history_message(Process* proc, Message* msg) {
     return 0;
 }
 
-int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
+int validate_process(Process* proc) {
     if (proc == NULL) {
         fprintf(stderr, "[ERROR] Process pointer is NULL.\n");
         return -1;
     }
+    return 0;
+}
 
+int validate_message_type(MessageType msg_type) {
     if (msg_type < STARTED || msg_type > BALANCE_HISTORY) {
         fprintf(stderr, "[ERROR] Invalid message type: %d\n", msg_type);
         return -1;
     }
+    return 0;
+}
 
-    timestamp_t current_time = get_physical_time();
-    Message msg;
-    msg.s_header.s_local_time = current_time;
-    msg.s_header.s_magic = MESSAGE_MAGIC;
-    msg.s_header.s_type = msg_type;
-    msg.s_header.s_payload_len = 0;
+void create_message(Message* msg, MessageType msg_type, timestamp_t current_time) {
+    msg->s_header.s_local_time = current_time;
+    msg->s_header.s_magic = MESSAGE_MAGIC;
+    msg->s_header.s_type = msg_type;
+    msg->s_header.s_payload_len = 0;
+}
 
+int send_message_for_type(Process* proc, MessageType msg_type, TransferOrder* transfer_order, Message* msg) {
     switch (msg_type) {
         case STARTED:
-            return send_started_message(proc, &msg, current_time);
+            return send_started_message(proc, msg, msg->s_header.s_local_time);
         case DONE:
-            return send_done_message(proc, &msg, current_time);
+            return send_done_message(proc, msg, msg->s_header.s_local_time);
         case TRANSFER:
-            return send_transfer_message(proc, &msg, transfer_order);
+            return send_transfer_message(proc, msg, transfer_order);
         case STOP:
-            return send_stop_message(proc, &msg);
+            return send_stop_message(proc, msg);
         case ACK:
-            return send_ack_message(proc, &msg);
+            return send_ack_message(proc, msg);
         case BALANCE_HISTORY:
-            return send_balance_history_message(proc, &msg);
+            return send_balance_history_message(proc, msg);
         default:
             fprintf(stderr, "[WARNING] Invalid message type for process %d.\n", proc->pid);
         return -1;
     }
 }
+
+int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
+    if (validate_process(proc) != 0) {
+        return -1;
+    }
+
+    if (validate_message_type(msg_type) != 0) {
+        return -1;
+    }
+
+    timestamp_t current_time = get_physical_time();
+    Message msg;
+    create_message(&msg, msg_type, current_time);
+
+    return send_message_for_type(proc, msg_type, transfer_order, &msg);
+}
+
 
 void update_balance_history(BalanceHistory* record, timestamp_t t, balance_t cur_balance) {
     record->s_history[t] = (BalanceState) {
