@@ -3,9 +3,9 @@
 #include <asm-generic/errno.h>
 
 
-#include "util.h"
+#include "helpers.h"
 #include "common.h"
-#include "pipes_manager.h"
+#include "pipe_helper.h"
 
 
 const int FLAG_MAIN = 1;
