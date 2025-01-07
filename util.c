@@ -165,17 +165,26 @@ void close_pipe_based_on_condition(Process* pipes, int i, int j, FILE* pipe_file
     }
 }
 
-void close_non_related_pipes(Process* pipes, FILE* pipe_file_ptr) {
+void process_pipes(Process* pipes, FILE* pipe_file_ptr, int i) {
     int n = pipes->num_process;
-
-    for (int i = 0; i < n; i++) {
-        for (int j = 0; j < n; j++) {
-            if (i != j) {
-                close_pipe_based_on_condition(pipes, i, j, pipe_file_ptr);
-            }
+    for (int j = 0; j < n; j++) {
+        if (i != j) {
+            close_pipe_based_on_condition(pipes, i, j, pipe_file_ptr);
         }
     }
 }
+
+void iterate_over_processes(Process* pipes, FILE* pipe_file_ptr) {
+    int n = pipes->num_process;
+    for (int i = 0; i < n; i++) {
+        process_pipes(pipes, pipe_file_ptr, i);
+    }
+}
+
+void close_non_related_pipes(Process* pipes, FILE* pipe_file_ptr) {
+    iterate_over_processes(pipes, pipe_file_ptr);
+}
+
 
 
 void close_outgoing_pipe(Process* processes, int pid, int target, FILE* pipe_file_ptr) {
