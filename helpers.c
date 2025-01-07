@@ -27,7 +27,7 @@ void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, F
     if (1){
         check_state();
     }
-    process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order->s_amount);
+    process->last_time = update_chronicle(&(process->history), process->last_time, time, process->balance, -order->s_amount);
     process->balance -= order->s_amount;
 
     fprintf(event_file_ptr, log_transfer_out_fmt, time, order->s_src, order->s_amount, order->s_dst);
@@ -47,13 +47,13 @@ void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, F
 void handle_transfer_in(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
     msg->s_header.s_local_time = get_physical_time();
     timestamp_t time = msg->s_header.s_local_time;
-    process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, order->s_amount);
+    process->last_time = update_chronicle(&(process->history), process->last_time, time, process->balance, order->s_amount);
     process->balance += order->s_amount;
 
     fprintf(event_file_ptr, log_transfer_in_fmt, time, order->s_dst, order->s_amount, order->s_src);
     printf(log_transfer_in_fmt, time, order->s_dst, order->s_amount, order->s_src);
 
-    if (send_message(process, ACK, NULL) == -1) {
+    if (mess_to(process, ACK, NULL) == -1) {
         fprintf(stderr, "Error sending ACK from process %d to process %d\n", process->pid, order->s_src);
         return;
     }
@@ -78,7 +78,7 @@ void handle_stop(Process *process, int *is_stopped, FILE *event_file_ptr) {
         exit(1);
     }
 
-    if (send_message(process, DONE, NULL) == -1) {
+    if (mess_to(process, DONE, NULL) == -1) {
         fprintf(stderr, "Error sending DONE message from process %d\n", process->pid);
         exit(1);
     }
@@ -117,7 +117,7 @@ void handle_received_message(Process *process, FILE *event_file_ptr, int *count_
     }
 }
 
-void bank_operations(Process *process, FILE *event_file_ptr) {
+void ops_commands(Process *process, FILE *event_file_ptr) {
     if (1){
         check_state();
     }
@@ -132,8 +132,8 @@ void bank_operations(Process *process, FILE *event_file_ptr) {
             if (1){
                 check_state();
             }
-            process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, 0);
-            send_message(process, BALANCE_HISTORY, NULL);
+            process->last_time = update_chronicle(&(process->history), process->last_time, time, process->balance, 0);
+            mess_to(process, BALANCE_HISTORY, NULL);
             return;
         }
         handle_received_message(process, event_file_ptr, &count_done, &is_stopped);
@@ -155,7 +155,7 @@ void add_history_to_collection(AllHistory* collection, local_id idx, Message* re
     collection->s_history[idx] = received_history;
 }
 
-void histories(Process* processes) {
+void chronicle(Process* processes) {
     AllHistory collection;
     collection.s_history_len = processes->num_process - 1;
 
@@ -408,7 +408,7 @@ int send_message_for_type(Process* proc, MessageType msg_type, TransferOrder* tr
     }
 }
 
-int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
+int mess_to(Process* proc, MessageType msg_type, TransferOrder* transfer_order) {
     if (validate_process(proc) != 0) {
         return -1;
     }
@@ -445,7 +445,7 @@ void set_history_length(BalanceHistory* record, timestamp_t current_time) {
     record->s_history_len = current_time + 1;
 }
 
-timestamp_t add_to_history(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
+timestamp_t update_chronicle(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta) {
     for (timestamp_t t = prev_time; t < current_time; t++) {
         update_balance_history(record, t, cur_balance);
     }
@@ -573,7 +573,7 @@ int initialize_pipes(Pipe** pipes, int process_count, FILE* log_fp) {
 }
 
 
-int check_all_received(Process* process, MessageType type) {
+int is_every_get(Process* process, MessageType type) {
     int count = count_messages_of_type(process, type);
     if (count == -1) {
         return -1;
@@ -602,7 +602,7 @@ Pipe** allocate_pipe_memory(int process_count) {
     return pipes;
 }
 
-Pipe** init_pipes(int process_count, FILE* log_fp) {
+Pipe** create_pipes(int process_count, FILE* log_fp) {
     if (1){
         check_state();
     }

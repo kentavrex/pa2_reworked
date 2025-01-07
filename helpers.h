@@ -14,16 +14,16 @@
 #include "base_vars.h"
 
 
-Pipe** init_pipes(int process_count, FILE* log_file_ptr);
+Pipe** create_pipes(int process_count, FILE* log_file_ptr);
 
-int send_message(Process* proc, MessageType msg_type, TransferOrder* transfer_order);
+int mess_to(Process* proc, MessageType msg_type, TransferOrder* transfer_order);
 
-int check_all_received(Process* process, MessageType type);
+int is_every_get(Process* process, MessageType type);
 
-timestamp_t add_to_history(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta);
+timestamp_t update_chronicle(BalanceHistory* record, timestamp_t prev_time, timestamp_t current_time, balance_t cur_balance, balance_t delta);
 
-void histories(Process* proc);
+void chronicle(Process* proc);
 
-void bank_operations(Process *process, FILE* event_file_ptr);
+void ops_commands(Process *process, FILE* event_file_ptr);
 
 #endif

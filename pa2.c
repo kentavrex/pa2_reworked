@@ -28,7 +28,7 @@ int receive_acknowledgment(void *context_data, local_id recipient, Message *ack_
 void transfer(void *context_data, local_id initiator, local_id recipient, balance_t transfer_amount) {
     TransferOrder transfer_info;
     prepare_transfer_info(&transfer_info, initiator, recipient, transfer_amount);
-    send_message(context_data, TRANSFER, &transfer_info);
+    mess_to(context_data, TRANSFER, &transfer_info);
 
     Message ack_message;
     if (receive_acknowledgment(context_data, recipient, &ack_message) != 0) {
@@ -113,9 +113,9 @@ void initialize_child_process(Process *child_proc, int num_processes, int *balan
 }
 
 void handle_started_phase(Process *child_proc, FILE *log_events, int id) {
-    send_message(child_proc, STARTED, NULL);
+    mess_to(child_proc, STARTED, NULL);
     fprintf(log_events, log_started_fmt, get_physical_time(), id, getpid(), getppid(), child_proc->balance);
-    if (check_all_received(child_proc, STARTED) != 0) {
+    if (is_every_get(child_proc, STARTED) != 0) {
         fprintf(stderr, "Error: Process %d failed to receive all STARTED messages\n", id);
         exit(EXIT_FAILURE);
     }
@@ -127,7 +127,7 @@ void setup_child_process(int num_processes, int *balances, Pipe **pipes, int id,
     initialize_child_process(&child_proc, num_processes, balances, pipes, id);
     close_non_related_pipes(&child_proc, log_pipes);
     handle_started_phase(&child_proc, log_events, id);
-    bank_operations(&child_proc, log_events);
+    ops_commands(&child_proc, log_events);
     close_outcoming_pipes(&child_proc, log_pipes);
     exit(EXIT_SUCCESS);
 }
@@ -154,7 +154,7 @@ void close_unrelated_pipes_and_log(Process* parent_proc, FILE* log_pipes) {
 }
 
 int wait_for_all_started_messages(Process* parent_proc, FILE* log_events) {
-    if (check_all_received(parent_proc, STARTED) != 0) {
+    if (is_every_get(parent_proc, STARTED) != 0) {
         fprintf(stderr, "Error: Parent process failed to receive all STARTED messages\n");
         return -1;
     }
@@ -167,7 +167,7 @@ void perform_bank_robbery(Process* parent_proc, int num_processes) {
 }
 
 int wait_for_all_done_messages(Process* parent_proc, FILE* log_events) {
-    if (check_all_received(parent_proc, DONE) != 0) {
+    if (is_every_get(parent_proc, DONE) != 0) {
         fprintf(stderr, "Error: Parent process failed to receive all DONE messages\n");
         return -1;
     }
@@ -203,7 +203,7 @@ void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FIL
         handle_error_and_exit(log_pipes, log_events);
     }
     perform_bank_robbery(&parent_proc, num_processes);
-    send_message(&parent_proc, STOP, NULL);
+    mess_to(&parent_proc, STOP, NULL);
     if (1){
         check_state_main();
     }
@@ -211,7 +211,7 @@ void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FIL
         handle_error_and_exit(log_pipes, log_events);
     }
 
-    histories(&parent_proc);
+    chronicle(&parent_proc);
 
     close_pipes_and_wait(&parent_proc, log_pipes, log_events);
 }
@@ -228,7 +228,7 @@ int main(int argc, char *argv[]) {
     int balances[num_processes - 1];
     parse_initial_balances(argc, argv, num_processes, balances);
 
-    Pipe **pipes = init_pipes(num_processes, log_pipes);
+    Pipe **pipes = create_pipes(num_processes, log_pipes);
 
     create_child_processes(num_processes, balances, pipes, log_pipes, log_events);
 
