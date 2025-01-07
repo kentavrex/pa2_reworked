@@ -52,7 +52,7 @@ void validate_arguments(int argc, char *argv[], int *num_processes) {
         fprintf(stderr, "Process count should be between 1 and 10\n");
         exit(1);
     }
-    *num_processes += 1; // Include parent process
+    *num_processes += 1;
 }
 
 FILE *open_log_file(const char *filename) {

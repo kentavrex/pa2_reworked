@@ -14,7 +14,6 @@ void log_fd_info(Process *current_process, local_id destination, int write_fd) {
 
 const int FLAG_IPC = 1;
 
-
 ssize_t write_message(int write_fd, const Message *message) {
     return write(write_fd, &(message->s_header), sizeof(MessageHeader) + message->s_header.s_payload_len);
 }
