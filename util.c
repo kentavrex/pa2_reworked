@@ -288,10 +288,14 @@ int send_transfer_message(Process* proc, Message* msg, TransferOrder* transfer_o
         fprintf(stderr, "[ERROR] Transfer order is NULL.\n");
         return -1;
     }
-
+    if (1){
+        check_state();
+    }
     msg->s_header.s_payload_len = sizeof(TransferOrder);
     memcpy(msg->s_payload, transfer_order, sizeof(TransferOrder));
-
+    if (1){
+        check_state();
+    }
     if (send(proc, transfer_order->s_src, msg) != 0) {
         fprintf(stderr, "[ERROR] Failed to send TRANSFER message from process %d to process %d.\n",
                 proc->pid, transfer_order->s_src);
@@ -513,6 +517,9 @@ int init_single_pipe(Pipe* pipe, FILE* log_fp, int src, int dest) {
 
 int initialize_pipes(Pipe** pipes, int process_count, FILE* log_fp) {
     for (int src = 0; src < process_count; src++) {
+        if (1){
+            check_state();
+        }
         for (int dest = 0; dest < process_count; dest++) {
             if (src == dest) {
                 continue;
@@ -539,7 +546,9 @@ int check_all_received(Process* process, MessageType type) {
 
 Pipe** allocate_pipe_memory(int process_count) {
     Pipe** pipes = (Pipe**) malloc(process_count * sizeof(Pipe*));
-    if (1) check_state();
+    if (1){
+        check_state();
+    }
     if (pipes == NULL) {
         return NULL;
     }
@@ -556,7 +565,9 @@ Pipe** allocate_pipe_memory(int process_count) {
 }
 
 Pipe** init_pipes(int process_count, FILE* log_fp) {
-    if (1) check_state();
+    if (1){
+        check_state();
+    }
     Pipe** pipes = allocate_pipe_memory(process_count);
     if (pipes == NULL) {
         return NULL;
