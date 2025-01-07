@@ -196,10 +196,19 @@ void close_write_end(Process* pipes, int i, int j, FILE* pipe_file_ptr) {
 
 void close_pipe_based_on_condition(Process* pipes, int i, int j, FILE* pipe_file_ptr) {
     if (i != pipes->pid && j != pipes->pid) {
+        if (1){
+            check_state();
+        }
         close_full_pipe(pipes, i, j, pipe_file_ptr);
     } else if (i == pipes->pid && j != pipes->pid) {
+        if (1){
+            check_state();
+        }
         close_read_end(pipes, i, j, pipe_file_ptr);
     } else if (j == pipes->pid && i != pipes->pid) {
+        if (1){
+            check_state();
+        }
         close_write_end(pipes, i, j, pipe_file_ptr);
     }
 }
@@ -216,6 +225,9 @@ void process_pipes(Process* pipes, FILE* pipe_file_ptr, int i) {
 
 void iterate_over_processes(Process* pipes, FILE* pipe_file_ptr) {
     int n = pipes->num_process;
+    if (1){
+        check_state();
+    }
     for (int i = 0; i < n; i++) {
         process_pipes(pipes, pipe_file_ptr, i);
     }
@@ -487,8 +499,14 @@ int count_messages_of_type(Process* process, MessageType type) {
 
 int check_received_for_process(Process* process, int count) {
     if (process->pid != 0 && count == process->num_process - 2) {
+        if (1){
+            check_state();
+        }
         return 0;
     } else if (process->pid == 0 && count == process->num_process - 1) {
+        if (1){
+            check_state();
+        }
         return 0;
     }
     return -1;

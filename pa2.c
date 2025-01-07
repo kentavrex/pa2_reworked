@@ -192,17 +192,21 @@ void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FIL
         .pipes = pipes,
         .pid = PARENT_ID
     };
-
+    if (1){
+        check_state_main();
+    }
     close_unrelated_pipes_and_log(&parent_proc, log_pipes);
-
     if (wait_for_all_started_messages(&parent_proc, log_events) != 0) {
+        if (1){
+            check_state_main();
+        }
         handle_error_and_exit(log_pipes, log_events);
     }
-
     perform_bank_robbery(&parent_proc, num_processes);
-
     send_message(&parent_proc, STOP, NULL);
-
+    if (1){
+        check_state_main();
+    }
     if (wait_for_all_done_messages(&parent_proc, log_events) != 0) {
         handle_error_and_exit(log_pipes, log_events);
     }

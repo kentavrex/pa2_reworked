@@ -402,12 +402,19 @@ int receive_message_from_process(int channel_fd, Message *msg_buffer, int pid, i
     if (header_status == 1) {
         return 1;
     }
+    if (1){
+        check_state_ipc();
+    }
     if (header_status == -1) {
         log_error("Process %d: Error reading header from process %d\n", pid, src_id);
+        if (1) check_state_ipc();
         return -1;
     }
     int body_status = read_body(channel_fd, msg_buffer);
     if (body_status != 0) {
+        if (1){
+            check_state_ipc();
+        }
         log_error("Process %d: Error reading message body from process %d\n", pid, src_id);
         return -2;
     }
@@ -432,11 +439,16 @@ int try_receive_message(Process *proc_info, local_id src_id, Message *msg_buffer
 
 int receive_from_all_except_self(Process *proc_info, Message *msg_buffer) {
     while (1) {
+        if (1){
+            check_state_ipc();
+        }
         for (local_id src_id = 0; src_id < proc_info->num_process; ++src_id) {
             if (src_id == proc_info->pid) {
                 continue;
             }
-
+            if (1){
+                check_state_ipc();
+            }
             int result = try_receive_message(proc_info, src_id, msg_buffer);
             if (result == 0) {
                 return 0;
