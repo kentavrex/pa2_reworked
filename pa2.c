@@ -133,37 +133,67 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
 }
 
 
+void close_unrelated_pipes_and_log(Process* parent_proc, FILE* log_pipes) {
+    close_non_related_pipes(parent_proc, log_pipes);
+}
+
+int wait_for_all_started_messages(Process* parent_proc, FILE* log_events) {
+    if (check_all_received(parent_proc, STARTED) != 0) {
+        fprintf(stderr, "Error: Parent process failed to receive all STARTED messages\n");
+        return -1;
+    }
+    fprintf(log_events, log_received_all_started_fmt, get_physical_time(), PARENT_ID);
+    return 0;
+}
+
+void perform_bank_robbery(Process* parent_proc, int num_processes) {
+    bank_robbery(parent_proc, num_processes - 1);
+}
+
+int wait_for_all_done_messages(Process* parent_proc, FILE* log_events) {
+    if (check_all_received(parent_proc, DONE) != 0) {
+        fprintf(stderr, "Error: Parent process failed to receive all DONE messages\n");
+        return -1;
+    }
+    fprintf(log_events, log_received_all_done_fmt, get_physical_time(), PARENT_ID);
+    return 0;
+}
+
+void close_pipes_and_wait(Process* parent_proc, FILE* log_pipes, FILE* log_events) {
+    close_outcoming_pipes(parent_proc, log_pipes);
+    while (wait(NULL) > 0);
+}
+
 void handle_parent_process(int num_processes, Pipe **pipes, FILE *log_pipes, FILE *log_events) {
     Process parent_proc = {
         .num_process = num_processes,
         .pipes = pipes,
         .pid = PARENT_ID
     };
-    close_non_related_pipes(&parent_proc, log_pipes);
 
-    if (check_all_received(&parent_proc, STARTED) != 0) {
-        fprintf(stderr, "Error: Parent process failed to receive all STARTED messages\n");
+    close_unrelated_pipes_and_log(&parent_proc, log_pipes);
+
+    if (wait_for_all_started_messages(&parent_proc, log_events) != 0) {
         fclose(log_pipes);
         fclose(log_events);
         exit(EXIT_FAILURE);
     }
-    fprintf(log_events, log_received_all_started_fmt, get_physical_time(), PARENT_ID);
 
-    bank_robbery(&parent_proc, num_processes - 1);
+    perform_bank_robbery(&parent_proc, num_processes);
+
     send_message(&parent_proc, STOP, NULL);
 
-    if (check_all_received(&parent_proc, DONE) != 0) {
-        fprintf(stderr, "Error: Parent process failed to receive all DONE messages\n");
+    if (wait_for_all_done_messages(&parent_proc, log_events) != 0) {
         fclose(log_pipes);
         fclose(log_events);
         exit(EXIT_FAILURE);
     }
-    fprintf(log_events, log_received_all_done_fmt, get_physical_time(), PARENT_ID);
 
     histories(&parent_proc);
-    close_outcoming_pipes(&parent_proc, log_pipes);
-    while (wait(NULL) > 0);
+
+    close_pipes_and_wait(&parent_proc, log_pipes, log_events);
 }
+
 
 int main(int argc, char *argv[]) {
     int num_processes;
