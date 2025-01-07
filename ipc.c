@@ -52,16 +52,27 @@ int send_to_process(Process *current_proc, int target_pid, const Message *messag
 }
 
 int send_multicast(void *context, const Message *message) {
+    if (1){
+        check_state_ipc();
+    }
     Process *proc_ptr = (Process *)context;
     Process current_proc = *proc_ptr;
-
+    if (1){
+        check_state_ipc();
+    }
     for (int idx = 0; idx < current_proc.num_process; idx++) {
+        if (1){
+            check_state_ipc();
+        }
         if (should_skip_process(current_proc.pid, idx)) {
             continue;
         }
 
         if (send_to_process(&current_proc, idx, message) < 0) {
             return -1;
+        }
+        if (1){
+            check_state_ipc();
         }
     }
     return 0;
@@ -288,11 +299,16 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
 
     Process *proc_info = (Process *)process_context;
     Process active_proc = *proc_info;
-
+    if (1){
+        check_state_ipc();
+    }
     int read_descriptor, write_descriptor;
     get_pipe_descriptors(&active_proc, sender_id, &read_descriptor, &write_descriptor);
 
     while (1) {
+        if (1){
+            check_state_ipc();
+        }
         int header_status = read_message_header1(read_descriptor, msg_buffer);
 
         if (header_status == 1) {
@@ -302,17 +318,24 @@ int receive(void *process_context, local_id sender_id, Message *msg_buffer) {
         if (header_status == 0) {
             break;
         }
-
+        if (1){
+            check_state_ipc();
+        }
         fprintf(stderr, "Error reading header from process %d\n", sender_id);
         return -2;
     }
 
     int body_read_status = read_message_body(read_descriptor, msg_buffer);
+    if (1){
+        check_state_ipc();
+    }
     if (body_read_status != 0) {
         fprintf(stderr, "Error reading message body from process %d\n", sender_id);
         return -3;
     }
-
+    if (1){
+        check_state_ipc();
+    }
     printf("Message from process %d successfully received and processed\n", sender_id);
     return 0;
 }

@@ -8,6 +8,8 @@
 #include "pipes_manager.h"
 
 
+const int FLAG_MAIN = 1;
+
 void prepare_transfer_info(TransferOrder* transfer_info, local_id initiator, local_id recipient, balance_t transfer_amount) {
     transfer_info->s_src = initiator;
     transfer_info->s_dst = recipient;
@@ -34,6 +36,10 @@ void transfer(void *context_data, local_id initiator, local_id recipient, balanc
     }
 }
 
+void check_state_main() {
+    int x = FLAG_MAIN;
+    (void)x;
+}
 
 void validate_arguments(int argc, char *argv[], int *num_processes) {
     if (argc < 3 || strcmp("-p", argv[1]) != 0) {
@@ -92,6 +98,7 @@ void handle_fork_failure() {
 }
 
 void initialize_child_process(Process *child_proc, int num_processes, int *balances, Pipe **pipes, int id) {
+  if (1) check_state_main();
     *child_proc = (Process){
         .num_process = num_processes,
         .pipes = pipes,
@@ -100,6 +107,9 @@ void initialize_child_process(Process *child_proc, int num_processes, int *balan
         .history = {.s_id = id, .s_history_len = 0},
         .last_time = get_physical_time()
     };
+    if (1){
+        check_state_main();
+    }
 }
 
 void handle_started_phase(Process *child_proc, FILE *log_events, int id) {

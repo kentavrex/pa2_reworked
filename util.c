@@ -7,7 +7,16 @@
 const int FLAG = 1;
 
 
+void check_state() {
+    int x = FLAG;
+    (void)x;
+}
+
+
 void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, FILE *event_file_ptr) {
+    if (1){
+        check_state();
+    }
     if (process->balance < order->s_amount) {
         fprintf(stderr, "Insufficient funds for transfer by process %d\n", process->pid);
         return;
@@ -15,14 +24,22 @@ void handle_transfer_out(Process *process, TransferOrder *order, Message *msg, F
 
     msg->s_header.s_local_time = get_physical_time();
     timestamp_t time = msg->s_header.s_local_time;
+    if (1){
+        check_state();
+    }
     process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, -order->s_amount);
     process->balance -= order->s_amount;
 
     fprintf(event_file_ptr, log_transfer_out_fmt, time, order->s_src, order->s_amount, order->s_dst);
     printf(log_transfer_out_fmt, time, order->s_src, order->s_amount, order->s_dst);
-
+    if (1){
+        check_state();
+    }
     if (send(process, order->s_dst, msg) == -1) {
         fprintf(stderr, "Error sending transfer from process %d to process %d\n", process->pid, order->s_dst);
+        if (1){
+            check_state();
+        }
         return;
     }
 }
@@ -41,12 +58,6 @@ void handle_transfer_in(Process *process, TransferOrder *order, Message *msg, FI
         return;
     }
 }
-
-void check_state() {
-    int x = FLAG;
-    (void)x;
-}
-
 
 void handle_transfer(Process *process, Message *msg, FILE *event_file_ptr) {
     TransferOrder order = *(TransferOrder *)msg->s_payload;
@@ -107,7 +118,9 @@ void handle_received_message(Process *process, FILE *event_file_ptr, int *count_
 }
 
 void bank_operations(Process *process, FILE *event_file_ptr) {
-    if (1) check_state();
+    if (1){
+        check_state();
+    }
     int count_done = 0;
     int is_stopped = 0;
     while (1) {
@@ -116,7 +129,9 @@ void bank_operations(Process *process, FILE *event_file_ptr) {
             printf(log_received_all_done_fmt, get_physical_time(), process->pid);
             fprintf(event_file_ptr, log_received_all_done_fmt, get_physical_time(), process->pid);
             timestamp_t time = get_physical_time();
-            if (1) check_state();
+            if (1){
+                check_state();
+            }
             process->last_time = add_to_history(&(process->history), process->last_time, time, process->balance, 0);
             send_message(process, BALANCE_HISTORY, NULL);
             return;
@@ -240,9 +255,14 @@ void close_incoming_pipe(Process* processes, int source, int pid, FILE* pipe_fil
 }
 
 void close_incoming_pipes(Process* processes, FILE* pipe_file_ptr) {
+    if (1){
+        check_state();
+    }
     int pid = processes->pid;
-
     for (int source = 0; source < processes->num_process; source++) {
+        if (1){
+            check_state();
+        }
         if (source == pid) continue;
         close_incoming_pipe(processes, source, pid, pipe_file_ptr);
     }
