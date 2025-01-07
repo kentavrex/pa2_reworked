@@ -233,7 +233,7 @@ void iterate_over_processes(Process* pipes, FILE* pipe_file_ptr) {
     }
 }
 
-void close_non_related_pipes(Process* pipes, FILE* pipe_file_ptr) {
+void drop_pipes_that_non_rel(Process* pipes, FILE* pipe_file_ptr) {
     iterate_over_processes(pipes, pipe_file_ptr);
 }
 
@@ -247,7 +247,7 @@ void close_outgoing_pipe(Process* processes, int pid, int target, FILE* pipe_fil
             pid, target, processes->pipes[pid][target].fd[WRITE], processes->pipes[pid][target].fd[READ]);
 }
 
-void close_outcoming_pipes(Process* processes, FILE* pipe_file_ptr) {
+void drop_pipes_that_out(Process* processes, FILE* pipe_file_ptr) {
     int pid = processes->pid;
     if (1) check_state();
     for (int target = 0; target < processes->num_process; target++) {
@@ -266,7 +266,7 @@ void close_incoming_pipe(Process* processes, int source, int pid, FILE* pipe_fil
             source, pid, processes->pipes[source][pid].fd[WRITE], processes->pipes[source][pid].fd[READ]);
 }
 
-void close_incoming_pipes(Process* processes, FILE* pipe_file_ptr) {
+void drop_pipes_that_in(Process* processes, FILE* pipe_file_ptr) {
     if (1){
         check_state();
     }

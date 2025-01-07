@@ -125,10 +125,10 @@ void handle_started_phase(Process *child_proc, FILE *log_events, int id) {
 void setup_child_process(int num_processes, int *balances, Pipe **pipes, int id, FILE *log_pipes, FILE *log_events) {
     Process child_proc;
     initialize_child_process(&child_proc, num_processes, balances, pipes, id);
-    close_non_related_pipes(&child_proc, log_pipes);
+    drop_pipes_that_non_rel(&child_proc, log_pipes);
     handle_started_phase(&child_proc, log_events, id);
     ops_commands(&child_proc, log_events);
-    close_outcoming_pipes(&child_proc, log_pipes);
+    drop_pipes_that_out(&child_proc, log_pipes);
     exit(EXIT_SUCCESS);
 }
 
@@ -150,7 +150,7 @@ void create_child_processes(int num_processes, int *balances, Pipe **pipes, FILE
 
 
 void close_unrelated_pipes_and_log(Process* parent_proc, FILE* log_pipes) {
-    close_non_related_pipes(parent_proc, log_pipes);
+    drop_pipes_that_non_rel(parent_proc, log_pipes);
 }
 
 int wait_for_all_started_messages(Process* parent_proc, FILE* log_events) {
@@ -176,7 +176,7 @@ int wait_for_all_done_messages(Process* parent_proc, FILE* log_events) {
 }
 
 void close_pipes_and_wait(Process* parent_proc, FILE* log_pipes, FILE* log_events) {
-    close_outcoming_pipes(parent_proc, log_pipes);
+    drop_pipes_that_out(parent_proc, log_pipes);
     while (wait(NULL) > 0);
 }
 
